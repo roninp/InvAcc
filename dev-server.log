@@ -1,0 +1,21 @@
+
+> my-project@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.75:3000
+✓ Ready in 15.2s
+✓ Running next.config.mjs took 65ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+
+○ Compiling / ...
+ GET / 200 in 38.8s (next.js: 37.8s, application-code: 935ms)
+ GET / 200 in 187ms (next.js: 32ms, application-code: 156ms)
+ GET / 200 in 319ms (next.js: 54ms, application-code: 265ms)
+ GET / 200 in 370ms (next.js: 35ms, application-code: 335ms)
+ GET /api/prices?tickers=GOLD%2CEQMX%2COBLG 404 in 1946ms (next.js: 1757ms, application-code: 188ms)
