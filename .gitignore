@@ -7,9 +7,14 @@ __v0_jsx-dev-runtime.ts
 .vercel/
 
 # Environment variables
+.env
 .env*.local
+
+# Временный проект со старым дизайном (содержит локальные секреты server/.env)
+temp/
 
 # Common ignores
 node_modules
 .next/
+dev-server.log
 .DS_Store

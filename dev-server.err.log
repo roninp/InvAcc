@@ -1,0 +1,87 @@
+[finam-proxy] FINAM_TLS_INSECURE=1: проверка TLS отключена (только для разработки)
+(node:19028) Warning: Setting the NODE_TLS_REJECT_UNAUTHORIZED environment variable to '0' makes TLS connections and HTTPS requests insecure by disabling certificate verification.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Finam lot params failed: 400 {
+ "code": 3,
+ "message": "Invalid arguments:account_id",
+ "details": []
+}
+
+Finam lot params failed: 400 {
+ "code": 3,
+ "message": "Invalid arguments:account_id",
+ "details": []
+}
+
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <RedirectBoundary>
+      <RedirectErrorBoundary router={{...}}>
+        <InnerLayoutRouter url="/" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+          <SegmentViewNode type="page" pagePath="page.tsx">
+            <SegmentTrieNode>
+            <Page>
+              <PortfolioRebalancer>
+                <div className="min-h-scre...">
+                  <AppHeader>
+                  <main className="mx-auto ma...">
+                    <div className="space-y-6">
+                      <PortfolioSummary analysis={[...]} assets={[...]} cashBalance={217.87} ...>
+                        <div className="grid grid-...">
+                          <div className="group rela...">
+                            <div className="flex items...">
+                              <div>
+                                <p>
+                                <p
+                                  className="mt-2 font-mono text-2xl font-semibold tabular-nums tracking-tight text-fo..."
+                                >
++                                 11 395,64 ₽
+-                                 0,00 ₽
+                              ...
+                            ...
+                          ...
+                      ...
+          ...
+        ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at p (<anonymous>)
+    at PortfolioSummary (components/portfolio-summary.tsx:42:13)
+    at PortfolioRebalancer (components/portfolio-rebalancer.tsx:427:13)
+    at Page (app\page.tsx:4:10)
+  40 |           <div>
+  41 |             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Стоимость активов</p>
+> 42 |             <p className="mt-2 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+     |             ^
+  43 |               {formatRub(totalValue)}
+  44 |             </p>
+  45 |           </div>
+Finam lot params failed: 400 {
+ "code": 3,
+ "message": "Invalid arguments:account_id",
+ "details": []
+}
+
+Finam lot params failed: 400 {
+ "code": 3,
+ "message": "Invalid arguments:account_id",
+ "details": []
+}
+
+Finam lot params failed: 400 {
+ "code": 3,
+ "message": "Invalid arguments:account_id",
+ "details": []
+}
+
