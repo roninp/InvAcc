@@ -35,6 +35,10 @@ export function PortfolioRebalancer() {
 
   const [priceRefreshCooldown, setPriceRefreshCooldown] = useState(0)
   const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Флаг: пропускаем первый авто-save на монтировании, чтобы restore-эффект успел
+  // подтянуть сохранённые данные, а запись дефолтного («пустого») состояния не
+  // затирала localStorage (иначе портфель терялся бы при перезапуске).
+  const skipFirstSaveRef = useRef(true)
 
   const [nextId, setNextId] = useState<number>(1)
   const [cashBalance, setCashBalance] = useState<number>(0)
@@ -352,6 +356,14 @@ export function PortfolioRebalancer() {
   )
 
   useEffect(() => {
+    // Пропускаем первый вызов на монтировании: в этот момент restore-эффект ещё
+    // подтягивает сохранённые данные из localStorage. Запись дефолтного («пустого»)
+    // состояния в этот момент затирала бы хранилище, и портфель терялся бы
+    // при перезапуске. Сохранение начнёт срабатывать со следующего изменения.
+    if (skipFirstSaveRef.current) {
+      skipFirstSaveRef.current = false
+      return
+    }
     PortfolioStorage.save({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId })
   }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId])
 
