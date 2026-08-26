@@ -28,9 +28,7 @@ import { SettingsPage } from "./settings-page"
 import { TariffsPage } from "./tariffs-page"
 
 export function PortfolioRebalancer() {
-  const savedData = useMemo(() => (typeof window !== "undefined" ? PortfolioStorage.load() : null), [])
-
-  const [assets, setAssets] = useState<Asset[]>(() => normalizeAssets(savedData?.assets || []))
+  const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -38,8 +36,8 @@ export function PortfolioRebalancer() {
   const [priceRefreshCooldown, setPriceRefreshCooldown] = useState(0)
   const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const [nextId, setNextId] = useState<number>(() => savedData?.nextId ?? 1)
-  const [cashBalance, setCashBalance] = useState<number>(() => savedData?.cashBalance ?? 0)
+  const [nextId, setNextId] = useState<number>(1)
+  const [cashBalance, setCashBalance] = useState<number>(0)
   const [additionalCash, setAdditionalCash] = useState(0)
 
   const [isCalculated, setIsCalculated] = useState(false)
@@ -53,12 +51,27 @@ export function PortfolioRebalancer() {
   const [appliedAdjustmentIds, setAppliedAdjustmentIds] = useState<Set<number>>(() => new Set())
 
   const [activePage, setActivePage] = useState<Page>("portfolio")
-  const [tier, setTier] = useState<Tier>(() => savedData?.tier ?? "basic")
-  const [useGroups, setUseGroups] = useState<boolean>(() => savedData?.useGroups ?? false)
-  const [groups, setGroups] = useState<Group[]>(() => savedData?.groups ?? [])
-  const [nextGroupId, setNextGroupId] = useState<number>(() => savedData?.nextGroupId ?? 1)
+  const [tier, setTier] = useState<Tier>("basic")
+  const [useGroups, setUseGroups] = useState<boolean>(false)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [nextGroupId, setNextGroupId] = useState<number>(1)
 
   const maxAssets = useMemo(() => (tier === "free" ? 2 : 100), [tier])
+
+  // Восстановление данных из localStorage после монтирования. Не читаем window
+  // в фазе рендеринга, поэтому сервер и клиент формируют одинаковую разметку
+  // и гидратация проходит без ошибок.
+  useEffect(() => {
+    const saved = PortfolioStorage.load()
+    if (!saved) return
+    setAssets(normalizeAssets(saved.assets || []))
+    setNextId(saved.nextId)
+    setCashBalance(saved.cashBalance)
+    setTier(saved.tier)
+    setUseGroups(saved.useGroups)
+    setGroups(saved.groups)
+    setNextGroupId(saved.nextGroupId)
+  }, [])
 
   const analysis = useMemo(() => calculatedAnalysis ?? [], [calculatedAnalysis])
   const portfolioValidation = useMemo(

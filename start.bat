@@ -52,6 +52,12 @@ if not exist "%ROOT%.env.local" (
 )
 
 echo.
+echo --- Проверка порта 3000 ---
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /r /c:":3000 .*LISTENING"') do (
+    echo     Порт 3000 занят процессом PID %%P. Завершаю его...
+    taskkill /PID %%P /F >nul 2>nul
+)
+echo.
 echo [3/3] Запуск dev-сервера...
 echo       Адрес: http://localhost:3000
 echo       Для остановки нажмите Ctrl+C
