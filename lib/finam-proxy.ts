@@ -92,6 +92,15 @@ function getSecret(): string {
   return (process.env.FINAM_API_SECRET || "").trim()
 }
 
+/**
+ * Считать номер брокерского счёта из окружения (FINAM_ACCOUNT_ID).
+ * Указывается без префикса «КлФ» — только номерные символы, как параметр
+ * account_id в Finam Trade API. Пустое значение означает, что метод
+ * /assets/{symbol}/params недоступен и размер лота берётся из fallback (MOEX).
+ */
+function getAccountId(): string {
+  return (process.env.FINAM_ACCOUNT_ID || "").trim()
+}
 /** Готов ли провайдер к работе (задан ли ключ Finam). */
 export function isFinamConfigured(): boolean {
   return Boolean(getSecret())
@@ -253,8 +262,11 @@ const lotCache = new Map<string, { lotSize: number; fetchedAt: number }>()
 
 /**
  * Получить размер лота для символа вида TICKER@MISX.
- * Источник 1: Finam GET /v1/assets/{symbol}/params (trade_lot_size приходит строкой).
- * Источник 2 (fallback): MOEX ISS board TQBR — надёжный для MOEX-бумаг.
+ * Источник 1: Finam GET /v1/assets/{symbol}/params?account_id={FINAM_ACCOUNT_ID}
+ * (trade_lot_size приходит строкой). Метод требует брокерский счёт, поэтому
+ * вызывается только если FINAM_ACCOUNT_ID задан в окружении.
+ * Источник 2 (fallback): MOEX ISS board TQBR — надёжный для MOEX-бумаг и
+ * используется по умолчанию, пока FINAM_ACCOUNT_ID не сконфигурирован.
  */
 async function fetchLotSize(symbol: string): Promise<number | null> {
   const cached = lotCache.get(symbol)
@@ -262,27 +274,33 @@ async function fetchLotSize(symbol: string): Promise<number | null> {
     return cached.lotSize
   }
 
-  // 1) Finam Trade API
-  try {
-    const token = await getAccessToken()
-    const url = `${FINAM_API_BASE}/v1/assets/${encodeURIComponent(symbol)}/params`
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(8000),
-    })
-    if (resp.ok) {
-      const body = (await resp.json()) as FinamSymbolParams
-      const finLot = Number(body && body.trade_lot_size)
-      if (Number.isFinite(finLot) && finLot > 0) {
-        const lotSize = Math.floor(finLot)
-        lotCache.set(symbol, { lotSize, fetchedAt: Date.now() })
-        return lotSize
+  // 1) Finam Trade API (только при заданном FINAM_ACCOUNT_ID)
+  const accountId = getAccountId()
+  if (accountId) {
+    try {
+      const token = await getAccessToken()
+      const url = `${FINAM_API_BASE}/v1/assets/${encodeURIComponent(symbol)}/params?account_id=${encodeURIComponent(accountId)}`
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (resp.ok) {
+        const body = (await resp.json()) as FinamSymbolParams
+        const finLot = Number(body && body.trade_lot_size)
+        if (Number.isFinite(finLot) && finLot > 0) {
+          const lotSize = Math.floor(finLot)
+          lotCache.set(symbol, { lotSize, fetchedAt: Date.now() })
+          return lotSize
+        }
+      } else {
+        console.warn(
+          `[finam-proxy] Параметры актива Finam для ${symbol}: HTTP ${resp.status}`,
+          await resp.text().catch(() => ""),
+        )
       }
-    } else {
-      console.warn("Finam lot params failed:", resp.status, await resp.text().catch(() => ""))
+    } catch (err) {
+      console.warn(`[finam-proxy] Ошибка параметров актива Finam (${symbol}):`, (err as Error).message)
     }
-  } catch (err) {
-    console.warn("Finam lot request error:", (err as Error).message)
   }
 
   // 2) Fallback: MOEX ISS (тикер без @-суффикса)
