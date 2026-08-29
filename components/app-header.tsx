@@ -1,7 +1,8 @@
 "use client"
 
-import { ChartCandlestick, Layers, Settings, Tag } from "lucide-react"
-import type { Page, Tier } from "@/lib/types"
+import Link from "next/link"
+import { ChartCandlestick, Layers, LogIn, LogOut, Settings, Tag } from "lucide-react"
+import type { AuthUser, Page, Tier } from "@/lib/types"
 
 const NAV: { id: Page; label: string; icon: typeof Layers }[] = [
   { id: "portfolio", label: "Портфель", icon: Layers },
@@ -19,10 +20,14 @@ export function AppHeader({
   activePage,
   onNavigate,
   tier,
+  user,
+  onSignOut,
 }: {
   activePage: Page
   onNavigate: (page: Page) => void
   tier: Tier
+  user: AuthUser | null
+  onSignOut: () => void
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border/80 bg-background/80 backdrop-blur-xl">
@@ -43,6 +48,30 @@ export function AppHeader({
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               Тариф: <span className="text-foreground">{TIER_LABEL[tier]}</span>
             </span>
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="hidden max-w-[180px] truncate text-xs font-medium text-muted-foreground md:block" title={user.email ?? undefined}>
+                  {user.email}
+                </span>
+                <button
+                  onClick={onSignOut}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-negative-muted hover:text-negative"
+                  title="Выйти из аккаунта"
+                >
+                  <LogOut className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  Выйти
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm shadow-primary/30 transition-all hover:opacity-90 active:scale-95"
+              >
+                <LogIn className="h-3.5 w-3.5" strokeWidth={2.25} />
+                Войти
+              </Link>
+            )}
           </div>
         </div>
 

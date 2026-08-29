@@ -65,12 +65,45 @@ pnpm start      # запустить продакшен-сервер (порт 3
 | `FINAM_API_SECRET`    | ✅  | Секретный токен Finam Trade API. Получается на <https://api.finam.ru/tokens/>. Без него не работают мгновенные котировки. |
 | `FINAM_ACCOUNT_ID`    | нет | Номер брокерского счёта (без префикса «КлФ», только цифры). Позволяет брать лот напрямую из Finam API. Если не задан — лот берётся из fallback (MOEX ISS). |
 | `FINAM_TLS_INSECURE`  | нет | `1` — отключить проверку TLS-сертификата (нужно для корпоративного SSL-перехвата). **Только для локальной разработки.** |
+| `NEXT_PUBLIC_SUPABASE_URL`     | ✅  | URL Supabase-проекта (Dashboard → Project Settings → API). |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`| ✅  | Публикуемый (publishable) ключ Supabase. Публичный ключ — безопасен для браузера. |
+
+## 🔑 Авторизация (Supabase Auth)
+
+Регистрация и вход выполняются через Supabase Auth (email + пароль). При
+регистрации на указанную почту приходит письмо с ссылкой подтверждения
+(обязательное подтверждение email). Тариф пользователя хранится в таблице
+`public.profiles` и **назначается вручную** — на сайте изменить его нельзя.
+
+Как настроить отправку писем (SMTP) в Supabase:
+
+1. Откройте **Dashboard → Project Settings → Auth → SMTP**.
+2. Включите **Enable Custom SMTP** и заполните данные своего почтового сервера
+   (например, Yandex: Host `smtp.yandex.ru`, Port `465`, SSL `On`, User и
+   Password — от почтового ящика, от которого приложение шлёт письма,
+   Sender — тот же адрес). Без SMTP Supabase использует встроенный mailer,
+   который для не-проверенных доменов письма не доставляет.
+3. В **Auth → URL Configuration** задайте `Site URL = http://localhost:3000`
+   (в продакшене — домен сайта) и добавьте в `Redirect URLs`
+   `http://localhost:3000/**`.
+
+**Смена тарифа пользователя (вручную через БД):**
+
+```sql
+-- Dashboard → SQL Editor
+update public.profiles
+set tier = 'pro'   -- 'free' | 'basic' | 'pro'
+where email = 'user@example.com';
+```
+
+При входе приложение прочитает новый тариф из БД автоматически.
 
 ## 🧪 Тестирование
 
 Проект использует [Vitest](https://vitest.dev) для unit-тестов слоя логики
-(хранилище `PortfolioStorage`, нормализация активов). Тесты не требуют
-браузера и работают через эмуляцию `localStorage`.
+(хранилище `PortfolioStorage`, валидатор email, сервис аутентификации).
+Тесты не требуют браузера: `localStorage` эмулируется, клиент Supabase
+подменяется моком.
 
 Запуск всех тестов:
 
@@ -81,6 +114,9 @@ pnpm test        # однократный прогон (vitest run)
 Файлы тестов:
 - `lib/__tests__/storage.test.ts` — слой персистентности, включая регрессию
   на сценарий «портфель не теряется при перезапуске».
+- `lib/__tests__/email-validator.test.ts` — валидация email-адресов.
+- `lib/__tests__/auth-service.test.ts` — Result-контракты `AuthService`
+  (регистрация, вход, выход, чтение тарифа из БД).
 
 ## 🧹 Устранение проблем
 

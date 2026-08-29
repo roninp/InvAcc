@@ -10,9 +10,14 @@ const TIERS: { id: Tier; label: string; desc: string }[] = [
   { id: "pro", label: "Про", desc: "Группы + быстрые цены" },
 ]
 
+const TIER_LABEL: Record<Tier, string> = {
+  free: "Бесплатный",
+  basic: "Базовый",
+  pro: "Про",
+}
+
 export function SettingsPage({
   tier,
-  onTierChange,
   useGroups,
   onUseGroupsChange,
   groups,
@@ -20,7 +25,6 @@ export function SettingsPage({
   onRemoveGroup,
 }: {
   tier: Tier
-  onTierChange: (tier: Tier) => void
   useGroups: boolean
   onUseGroupsChange: (value: boolean) => void
   groups: Group[]
@@ -63,34 +67,14 @@ export function SettingsPage({
         <div className="mt-6 border-t border-border pt-6">
           <div className="font-medium text-foreground">Тарифный план</div>
           <p className="mb-4 mt-1 text-sm text-muted-foreground">
-            Выберите тариф. Пока выбирается вручную, в дальнейшем будет браться из БД.
+            Тариф назначается вручную администратором и не может быть изменён на сайте.
           </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {TIERS.map((t) => {
-              const active = tier === t.id
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => onTierChange(t.id)}
-                  className={`relative flex flex-col items-start rounded-xl border p-4 text-left transition-all duration-200 ${
-                    active
-                      ? "border-primary bg-primary/[0.05] shadow-sm"
-                      : "border-border bg-card hover:border-primary/40 hover:bg-muted/40"
-                  }`}
-                >
-                  {active && (
-                    <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    </span>
-                  )}
-                  <span className={`text-sm font-semibold ${active ? "text-primary" : "text-foreground"}`}>
-                    {t.label}
-                  </span>
-                  <span className="mt-1 text-xs text-muted-foreground">{t.desc}</span>
-                </button>
-              )
-            })}
+          <div className="inline-flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            <span className="text-muted-foreground">
+              Текущий тариф: <span className="font-semibold text-foreground">{TIER_LABEL[tier]}</span>
+            </span>
+            <span className="text-xs text-muted-foreground">— {TIERS.find((t) => t.id === tier)?.desc}</span>
           </div>
         </div>
 

@@ -39,6 +39,29 @@ export interface PortfolioData {
   nextGroupId: number
 }
 
+/** Минимальная длина пароля при регистрации (требование supabase-js — 8). */
+export const MIN_PASSWORD_LENGTH = 8
+
+/** Максимальная длина email-адреса по RFC 5321. */
+export const EMAIL_MAX_LENGTH = 254
+
+/** ДТО пользователя для UI — изолирует UI от типов Supabase. */
+export interface AuthUser {
+  id: string
+  email: string | null
+}
+
+/** Пропсы корневого компонента после SSR-чтения сессии и тарифа. */
+export interface RebalancerServerProps {
+  initialUser: AuthUser | null
+  initialTier: Tier
+}
+
+/** Результат операций аутентификации (Result-паттерн). */
+export type AuthResult =
+  | { success: true; user: AuthUser; needsEmailConfirmation?: boolean }
+  | { success: false; error: string }
+
 /** Базовый URL backend-прокси Finam Trade API (пустая строка = same-origin). */
 export const TBANK_PROXY_URL = ""
 

@@ -19,7 +19,18 @@ import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { MoexPriceService, TBankProxyPriceService, type PriceResult } from "@/lib/price-service"
 import { AssetValidator } from "@/lib/validator"
 import { PortfolioStorage, normalizeAssets } from "@/lib/storage"
-import { PRICE_REFRESH_COOLDOWN_SECONDS, type Asset, type AssetAnalysis, type Group, type Page, type Tier } from "@/lib/types"
+import { AuthService } from "@/lib/auth-service"
+import { createClient } from "@/lib/supabase/client"
+import {
+  PRICE_REFRESH_COOLDOWN_SECONDS,
+  type Asset,
+  type AssetAnalysis,
+  type AuthUser,
+  type Group,
+  type Page,
+  type RebalancerServerProps,
+  type Tier,
+} from "@/lib/types"
 import { AppHeader } from "./app-header"
 import { PortfolioSummary } from "./portfolio-summary"
 import { GroupAllocations } from "./group-allocations"
@@ -27,7 +38,7 @@ import { AssetTable } from "./asset-table"
 import { SettingsPage } from "./settings-page"
 import { TariffsPage } from "./tariffs-page"
 
-export function PortfolioRebalancer() {
+export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServerProps) {
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +66,8 @@ export function PortfolioRebalancer() {
   const [appliedAdjustmentIds, setAppliedAdjustmentIds] = useState<Set<number>>(() => new Set())
 
   const [activePage, setActivePage] = useState<Page>("portfolio")
-  const [tier, setTier] = useState<Tier>("basic")
+  const [tier, setTier] = useState<Tier>(initialTier)
+  const [user, setUser] = useState<AuthUser | null>(initialUser)
   const [useGroups, setUseGroups] = useState<boolean>(false)
   const [groups, setGroups] = useState<Group[]>([])
   const [nextGroupId, setNextGroupId] = useState<number>(1)
@@ -64,17 +76,53 @@ export function PortfolioRebalancer() {
 
   // Восстановление данных из localStorage после монтирования. Не читаем window
   // в фазе рендеринга, поэтому сервер и клиент формируют одинаковую разметку
-  // и гидратация проходит без ошибок.
+  // и гидратация проходит без ошибок. Тариф из localStorage не читается:
+  // он назначается вручную в БД либо равен 'free' для гостей.
   useEffect(() => {
     const saved = PortfolioStorage.load()
     if (!saved) return
     setAssets(normalizeAssets(saved.assets || []))
     setNextId(saved.nextId)
     setCashBalance(saved.cashBalance)
-    setTier(saved.tier)
     setUseGroups(saved.useGroups)
     setGroups(saved.groups)
     setNextGroupId(saved.nextGroupId)
+  }, [])
+
+  // Синхронизация сессии с сервером: вход/выход/обновление пользователя
+  // в другой вкладке или после PKCE-подтверждения email отражаются мгновенно.
+  useEffect(() => {
+    const supabase = createClient()
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        const {
+          data: { user: sessionUser },
+        } = await supabase.auth.getUser()
+        setUser(sessionUser ? { id: sessionUser.id, email: sessionUser.email ?? null } : null)
+        setTier(await AuthService.getTier(supabase))
+      } else if (event === "SIGNED_OUT") {
+        setUser(null)
+        setTier("free")
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Группы доступны только на тарифе «Про»: гарантия после авторизации/смены тарифа.
+  useEffect(() => {
+    if (tier !== "pro" && useGroups) {
+      setUseGroups(false)
+    }
+  }, [tier, useGroups])
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await AuthService.signOut(createClient())
+    } catch {
+      // Подписка onAuthStateChange сбросит состояние даже при сетевой ошибке.
+    }
   }, [])
 
   const analysis = useMemo(() => calculatedAnalysis ?? [], [calculatedAnalysis])
@@ -345,16 +393,6 @@ export function PortfolioRebalancer() {
     [resetCalculation],
   )
 
-  const handleTierChange = useCallback(
-    (newTier: Tier) => {
-      setTier(newTier)
-      if (newTier !== "pro" && useGroups) {
-        handleUseGroupsChange(false)
-      }
-    },
-    [useGroups, handleUseGroupsChange],
-  )
-
   useEffect(() => {
     // Пропускаем первый вызов на монтировании: в этот момент restore-эффект ещё
     // подтягивает сохранённые данные из localStorage. Запись дефолтного («пустого»)
@@ -392,7 +430,7 @@ export function PortfolioRebalancer() {
         setAssets(normalizeAssets(data.assets))
         setNextId(data.nextId)
         if (data.cashBalance != null) setCashBalance(data.cashBalance)
-        if (data.tier != null) setTier(data.tier)
+        // Тариф из файла импорта не применяется: он назначается вручную в БД.
         setUseGroups(data.useGroups ?? false)
         setGroups(data.groups ?? [])
         setNextGroupId(data.nextGroupId ?? 1)
@@ -414,7 +452,7 @@ export function PortfolioRebalancer() {
     setAssets([])
     setNextId(1)
     setCashBalance(0)
-    setTier("basic")
+    // Тариф не сбрасывается: он определяется сессией/БД.
     setAdditionalCash(0)
     setUseGroups(false)
     setGroups([])
@@ -432,13 +470,12 @@ export function PortfolioRebalancer() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader activePage={activePage} onNavigate={setActivePage} tier={tier} />
+      <AppHeader activePage={activePage} onNavigate={setActivePage} tier={tier} user={user} onSignOut={handleSignOut} />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {activePage === "settings" ? (
           <SettingsPage
             tier={tier}
-            onTierChange={handleTierChange}
             useGroups={useGroups}
             onUseGroupsChange={handleUseGroupsChange}
             groups={groups}
@@ -446,7 +483,7 @@ export function PortfolioRebalancer() {
             onRemoveGroup={handleRemoveGroup}
           />
         ) : activePage === "tariffs" ? (
-          <TariffsPage tier={tier} onSelectTier={handleTierChange} />
+          <TariffsPage tier={tier} />
         ) : (
           <div className="space-y-6">
             <PortfolioSummary

@@ -49,7 +49,7 @@ const PLANS: {
   },
 ]
 
-export function TariffsPage({ tier, onSelectTier }: { tier: Tier; onSelectTier: (tier: Tier) => void }) {
+export function TariffsPage({ tier }: { tier: Tier }) {
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -103,22 +103,24 @@ export function TariffsPage({ tier, onSelectTier }: { tier: Tier; onSelectTier: 
               </ul>
 
               <button
-                onClick={() => onSelectTier(plan.id)}
-                disabled={isCurrent}
-                className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 active:scale-[0.98] ${
+                disabled
+                className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                   isCurrent
                     ? "cursor-default border border-border bg-muted text-muted-foreground"
-                    : plan.highlight
-                      ? "bg-primary text-primary-foreground hover:opacity-90 shadow-sm shadow-primary/30"
-                      : "bg-foreground text-background hover:opacity-90"
+                    : "cursor-default border border-border bg-muted/40 text-muted-foreground"
                 }`}
+                title="Тариф назначается вручную в базе данных"
               >
-                {isCurrent ? "Активен" : "Выбрать тариф"}
+                {isCurrent ? "Активен" : "Назначается вручную"}
               </button>
             </div>
           )
         })}
       </div>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Смена тарифа выполняется администратором вручную и не может быть изменена на сайте.
+      </p>
     </div>
   )
 }
