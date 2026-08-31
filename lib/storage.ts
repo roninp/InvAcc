@@ -54,6 +54,62 @@ export class PortfolioStorage {
     }
   }
 
+  /**
+   * Резервная копия портфеля, заблокированного тарифом («прошлый портфель»).
+   * Хранится отдельным ключом и НЕ затрагивается обычным save/load/clear:
+   * она удаляется только после успешного восстановления (clearLocked) либо
+   * перезаписывается при новой парковке (saveLocked).
+   */
+  static LOCKED_STORAGE_KEY = "portfolioRebalancerLockedData"
+  static LOCKED_DATA_VERSION = 1
+
+  static saveLocked(data: PortfolioData): void {
+    try {
+      const payload = {
+        version: this.LOCKED_DATA_VERSION,
+        lockedAt: new Date().toISOString(),
+        assets: data.assets,
+        nextId: data.nextId,
+        cashBalance: data.cashBalance ?? 0,
+        tier: data.tier ?? "basic",
+        useGroups: data.useGroups ?? false,
+        groups: data.groups ?? [],
+        nextGroupId: data.nextGroupId ?? 1,
+      }
+      localStorage.setItem(this.LOCKED_STORAGE_KEY, JSON.stringify(payload))
+    } catch (err) {
+      console.warn("[v0][PortfolioStorage] Ошибка сохранения резервной копии:", (err as Error).message)
+    }
+  }
+
+  static loadLocked(): PortfolioData | null {
+    try {
+      const raw = localStorage.getItem(this.LOCKED_STORAGE_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      if (!this.validate(data)) return null
+      return {
+        assets: data.assets,
+        nextId: data.nextId,
+        cashBalance: data.cashBalance ?? 0,
+        tier: data.tier ?? "basic",
+        useGroups: data.useGroups ?? false,
+        groups: data.groups ?? [],
+        nextGroupId: data.nextGroupId ?? 1,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  static clearLocked(): void {
+    try {
+      localStorage.removeItem(this.LOCKED_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
+
   static exportToFile(data: PortfolioData): void {
     try {
       const payload = {

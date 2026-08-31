@@ -2,140 +2,132 @@
 
 ## Overview
 
-Подключить авторизацию через Supabase Auth (email + пароль с обязательным подтверждением email по письму) к приложению InvAcc: спроектировать и создать таблицу `profiles` (тарифы пользователей), автоматически создавать профиль со тарифом `free` при регистрации (тариф назначается вручную через БД и не меняется на сайте), добавить страницы `/register` и `/login` в дизайне существующего приложения, считывать тариф зарегистрированного пользователя из БД, а для гостей жёстко использовать `free`. Портфель остаётся в localStorage (синхронизация портфеля в БД — вне рамок задачи).
+Добавить контроль соответствия портфеля тарифу: если сохранённый портфель (localStorage) превышает лимиты текущего тарифа (больше активов, чем разрешает free/basic, или портфель использует группы — фича тарифа «Про»), приложение паркует портфель в резервную копию (отдельный ключ localStorage), обнуляет рабочий стол и показывает сообщение «Ваш портфель соответствует тарифу «…». Будет доступен после оплаты подписки» с заглушкой-кнопкой «Оплатить подписку». После повышения тарифа (смена tier в БД вручную) резервная копия автоматически восстанавливается и затирает текущий портфель. Восстановление срабатывает при перезагрузке страницы, повторном входе и на auth-событиях SIGNED_IN / USER_UPDATED (тариф перечитывается из БД). Фоновая авто-проверка тарифа по таймеру НЕ добавляется — по решению заказчика она появится вместе с системой оплаты.
 
-Подход: корневая страница становится async Server Component — читает сессию и тариф пользователя через `@supabase/ssr` (cookie-сессии с refresh-ротацией), передаёт начальное состояние в существующий клиентский компонент `PortfolioRebalancer`; сессия обновляется в `proxy.ts` (обновлённое в Next.js 16 имя middleware); вход/выход выполняются через изолированный сервис бизнес-логики `AuthService` (Result-паттерн, DI клиента). БД создаётся через Supabase MCP (`apply_migration`).
+Базис (уже реализован и не меняется): Supabase Auth (email+пароль, подтверждение email), таблица `profiles` с колонкой `tier`, SSR-чтение сессии и тарифа в `app/page.tsx`, клиент-синхронизация тарифа на auth-событиях. Лимиты: `free` — до 2 активов, `basic` — до 100, `pro` — группы активов + мгновенные цены. Портфель по-прежнему хранится в localStorage (ключ `portfolioRebalancerData`).
+
+Ключевое решение UX (согласовано): после обнуления приложение остаётся полностью рабочим в рамках текущего тарифа (на free — до 2 активов); резервная копия «прошлого портфеля» не затрагивается и восстанавливается после поднятия тарифа (перезаписывая текущий рабочий портфель).
 
 ## Types
 
-**`lib/types.ts` (расширение):**
+**`lib/portfolio-tier.ts` (новый модуль чистой логики, без UI-зависимостей):**
+
 ```ts
-/** ДТО пользователя для UI — изолирует UI от типов Supabase. */
-export interface AuthUser {
-  id: string
-  email: string | null
+/** Ранг тарифа: чем больше, тем «лучше». */
+export const TIER_RANK: Record<Tier, number> = { free: 0, basic: 1, pro: 2 }
+
+/** Максимум активов на бесплатном тарифе. */
+export const MAX_ASSETS_FREE = 2
+/** Максимум активов на платных тарифах. */
+export const MAX_ASSETS_PAID = 100
+
+/** Информация о заблокированном (припаркованном) портфеле для UI-баннера. */
+export interface LockedPortfolioInfo {
+  requiredTier: Tier
 }
 
-/** Пропсы корневого компонента после SSR-чтения сессии/тарифа. */
-export interface RebalancerServerProps {
-  initialUser: AuthUser | null
-  initialTier: Tier
-}
-
-/** Результат операций аутентификации (Result-паттерн). */
-export type AuthResult =
-  | { success: true; user: AuthUser }
-  | { success: false; error: string; needsEmailConfirmation?: boolean }
+/** Решение guard-эффекта за один проход. */
+export type LockDecision =
+  | { action: "none" }
+  | { action: "park"; requiredTier: Tier }        // бэкапа нет, текущий портфель не влезает — паркуем
+  | { action: "reset-excess"; requiredTier: Tier } // бэкап уже есть, а текущий портфель снова не влезает — только сброс
+  | { action: "restore"; backup: PortfolioData }   // тариф позволяет — восстанавливаем бэкап
 ```
 
-- `Tier` остаётся неизменным: `"free" | "basic" | "pro"`.
-- Добавляется экспорт `MIN_PASSWORD_LENGTH = 8` и `EMAIL_MAX_LENGTH = 254` (константы валидации).
-
-**`lib/supabase/database.types.ts` (новый):** сгенерированные типы БД (через MCP `generate_typescript_types` после создания таблицы) с интерфейсом `profiles`: `{ id: string; email: string; tier: "free"|"basic"|"pro"; created_at: string; updated_at: string }`.
-
-**Схема БД (`public.profiles`):**
-| Колонка | Тип | Ограничения |
-|---|---|---|
-| `id` | `uuid` | PK, `references auth.users(id) on delete cascade` |
-| `email` | `text` | `not null` |
-| `tier` | `text` | `not null default 'free'`, check `in ('free','basic','pro')` |
-| `created_at` | `timestamptz` | `not null default now()` |
-| `updated_at` | `timestamptz` | `not null default now()` |
-
-Индекс: `profiles_email_idx on (email)`. Триггер `handle_new_user()` (security definer) создаёт профиль `free` при INSERT в `auth.users` (`on conflict (id) do nothing`). RLS включён; единственная политика — `SELECT ... using (auth.uid() = id)`. Никаких INSERT/UPDATE/DELETE-политик для пользователей: тариф меняется только вручную (`update public.profiles set tier='pro' where email='...'` через SQL в дашборде/service_role).
+- `Tier`, `Asset`, `Group`, `PortfolioData`, `AuthUser` — из `lib/types.ts` (без изменений).
+- Новый ключ localStorage резервной копии: `portfolioRebalancerLockedData` (структура идентична `PortfolioData`, плюс поля `version` и `lockedAt`).
 
 ## Files
 
 **Новые:**
+
 | Файл | Назначение |
 |---|---|
-| `lib/supabase/server.ts` | `createClient()` для Server Components/Route Handlers: `createServerClient` из `@supabase/ssr`, `await cookies()`, `getAll()`/`setAll()` |
-| `lib/supabase/client.ts` | `createBrowserClient` (браузерная, cookie-сессии, `detectSessionInUrl` по умолчанию) |
-| `lib/supabase/database.types.ts` | Сгенерированные типы БД |
-| `lib/email-validator.ts` | Чистая функция валидации формата email (без UI-зависимостей) |
-| `lib/auth-service.ts` | Класс `AuthService` (статические методы, DI-клиент) — signUp/signIn/signOut/getTier + маппинг ошибок Supabase на русские сообщения |
-| `components/auth/auth-card.tsx` | Общая карточка бренда для страниц входа/регистрации (дизайн как у остальных) |
-| `components/auth/auth-form.tsx` | Клиентская форма (поле email, пароль с показ/скрытие, кнопка, ошибки, сабмит) — универсальная для логина и регистрации |
-| `app/login/page.tsx` | Страница входа: SSR-редирект авторизованных на `/`, рендер `AuthForm` |
-| `app/register/page.tsx` | Страница регистрации: SSR-редирект авторизованных на `/`, рендер `AuthForm` |
-| `proxy.ts` | Next.js 16 proxy (бывш. middleware): обновление сессии `@supabase/ssr` + редиректы `/login` `/register` → `/` для авторизованных |
-| `supabase/migrations/<timestamp>_create_profiles.sql` | Версия миграции в репозитории (документация) |
-| `lib/__tests__/email-validator.test.ts` | Vitest: юнит-тесты валидатора |
-| `lib/__tests__/auth-service.test.ts` | Vitest: AuthService с мок-клиентом Supabase |
+| `lib/portfolio-tier.ts` | Чистая логика guard: вычисление требуемого тарифа, сравнение рангов, тексты, решение (park / reset-excess / restore / none) |
+| `lib/__tests__/portfolio-tier.test.ts` | Vitest: юнит-тесты чистой логики |
 
 **Изменяемые:**
+
 | Файл | Изменения |
 |---|---|
-| `package.json` | + `@supabase/supabase-js`, `@supabase/ssr` |
-| `.env.example` | + `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (публикуемый ключ `sb_publishable_...`) с комментариями |
-| `.env.local` | Добавить реальные значения (при наличии) |
-| `app/page.tsx` | Становится async Server Component: читает `user` + `tier` из БД, рендерит `<PortfolioRebalancer initialUser initialTier />` |
-| `components/portfolio-rebalancer.tsx` | Принимает `initialUser`/`initialTier`; состояние `tier` инициализируется с сервера; подписка `onAuthStateChange` (обновление user/tier при входе/выходе); убрать `onTierChange` и передачу колбэков смены тарифа |
-| `components/app-header.tsx` | Показывать email пользователя + кнопку «Выйти» (аутентифицирован) или «Войти» (гость); бейдж тарифа остаётся |
-| `components/settings-page.tsx` | Карточки выбора тарифа → статичная строка «Тариф назначается администратором», текущий тариф — бейджем; `onTierChange` удаляется |
-| `components/tariffs-page.tsx` | Кнопки «Выбрать тариф» → заблокированы/скрыты, подпись «Тариф назначается вручную»; `onSelectTier` удаляется |
-| `README.md` | Раздел «Авторизация»: настройка SMTP, как поменять тариф в БД, переменные окружения |
-| `lib/types.ts` | Типы из раздела **Types** |
+| `lib/storage.ts` | Новые статические методы резервной копии: `LOCKED_STORAGE_KEY = "portfolioRebalancerLockedData"`, `LOCKED_DATA_VERSION = 1`, `saveLocked(data)`, `loadLocked(): PortfolioData \| null`, `clearLocked()`. Валидация — через существующий `validate` (структура идентична `PortfolioData`) |
+| `lib/__tests__/storage.test.ts` | Тесты save/load/clear резервной копии + отбраковка невалидного payload |
+| `components/portfolio-rebalancer.tsx` | Состояние `lock: LockedPortfolioInfo \| null`; guard-эффект; баннер с сообщением и кнопкой «Оплатить подписку»; хелперы `applyPortfolioData(data)` и `resetWorkspace()` |
+| `README.md` | Описание поведения, ключи localStorage, сценарии ручной проверки |
+
+**Без изменений:** `app/page.tsx`, `lib/auth-service.ts`, `components/app-header.tsx`, `components/settings-page.tsx`, `components/tariffs-page.tsx` (переключатель групп уже заблокирован для тарифов ниже pro, страница тарифов уже сообщает о ручном назначении).
+
 ## Functions
 
-**Новые:**
-| Сигнатура | Файл | Назначение |
-|---|---|---|
-| `isValidEmail(value: string): boolean` | `lib/email-validator.ts` | Формат-проверка email (regex + длина ≤ 254 + отсутствие пробелов) |
-| `createClient(): Promise<SupabaseClient<Database>>` (export из `lib/supabase/server.ts`) | `lib/supabase/server.ts` | SSR-клиент с cookie-сессией |
-| `createClient(): SupabaseClient<Database>` (export из `lib/supabase/client.ts`) | `lib/supabase/client.ts` | Браузерный клиент |
-| `AuthService.validateRegistrationEmail(email: string): string \| null` | `lib/auth-service.ts` | Валидация формата email (рус. сообщение или null) |
-| `AuthService.signUp(client, { email, password, emailRedirectTo }): Promise<AuthResult>` | `lib/auth-service.ts` | `signUp` + детект «письмо отправлено» (`data.session == null`); маппинг ошибок |
-| `AuthService.signIn(client, { email, password }): Promise<AuthResult>` | `lib/auth-service.ts` | `signInWithPassword`; маппинг `email_not_confirmed` |
-| `AuthService.signOut(client): Promise<void>` | `lib/auth-service.ts` | `auth.signOut()` |
-| `AuthService.getTier(client): Promise<Tier>` | `lib/auth-service.ts` | `select tier from profiles`, fallback `free` |
-| `toFriendlyAuthError(error: unknown): string` | `lib/auth-service.ts` | Код Supabase → русский текст |
-| `proxy(request: NextRequest): Promise<NextResponse>` | `proxy.ts` | Refresh сессии `@supabase/ssr`, редирект авторизованных с `/login` `/register` |
-| `Page(): Promise<JSX.Element>` (async) | `app/page.tsx` | SSR-инициализация user/tier |
+**Новые (`lib/portfolio-tier.ts`):**
 
-**Изменяемые:**
-- `PortfolioRebalancer` — сигнатура `({ initialUser, initialTier }: RebalancerServerProps)`; удаляется `handleTierChange`-логика; добавляется `useEffect` на `onAuthStateChange`.
-- `SettingsPage`/`TariffsPage` — пропсы лишаются `onTierChange`/`onSelectTier`.
+| Сигнатура | Назначение |
+|---|---|
+| `computeRequiredTier(portfolio: Pick<PortfolioData, "assets" \| "useGroups" \| "groups">): Tier` | `pro`, если `useGroups === true` \|\| `groups.length > 0` \|\| любой актив имеет `groupId != null`; иначе `basic`, если `assets.length > MAX_ASSETS_FREE`; иначе `free` |
+| `isTierSufficient(required: Tier, current: Tier): boolean` | `TIER_RANK[required] <= TIER_RANK[current]` |
+| `getTierLabel(tier: Tier): string` | `"Бесплатный"` / `"Базовый"` / `"Про"` |
+| `buildLockMessage(requiredTier: Tier): string` | `"Ваш портфель соответствует тарифу «Базовый». Будет доступен после оплаты подписки."` (тариф — через `getTierLabel`) |
+| `decideLockState(input: { tier: Tier; current: PortfolioData \| null; backup: PortfolioData \| null }): LockDecision` | Правила ниже |
+| `saveLocked(data: PortfolioData): void` | `lib/storage.ts` — парковка портфеля |
+| `loadLocked(): PortfolioData \| null` | `lib/storage.ts` — чтение резервной копии |
+| `clearLocked(): void` | `lib/storage.ts` — удаление резервной копии |
 
-**Удаляемые:** смена тарифа на клиенте (`settings-page.tsx`, `tariffs-page.tsx`); запись `tier` из UI в localStorage прекращается (для гостей тариф всегда `free`).
+**Правила `decideLockState`:**
+1. Если `backup` существует: `requiredOfBackup = computeRequiredTier(backup)`.
+   - `isTierSufficient(requiredOfBackup, tier)` → `{ action: "restore", backup }` (удалить бэкап, применить данные).
+   - Иначе если текущий портфель не влезает в тариф → `{ action: "reset-excess", requiredTier: requiredOfBackup }` (существующий бэкап не перезаписывается, только сброс рабочего стола).
+   - Иначе → `{ action: "none" }` (баннер по-прежнему виден: бэкап есть, тариф недостаточен).
+2. Если `backup` нет, а `current` не влезает в тариф → `{ action: "park", requiredTier: computeRequiredTier(current) }`.
+3. Иначе → `{ action: "none" }`.
+
+**Изменяемые (в `components/portfolio-rebalancer.tsx`):**
+- Guard-эффект (деп-зависимости: `tier, assets, nextId, cashBalance, useGroups, groups, nextGroupId`; не работает до завершения restore-эффекта — флаг-реф `hydratedRef`):
+  - `park` → `PortfolioStorage.saveLocked(current)` → `resetWorkspace()` → `setLock({ requiredTier })`;
+  - `reset-excess` → `resetWorkspace()` → `setLock({ requiredTier })`;
+  - `restore` → `applyPortfolioData(backup)` → `PortfolioStorage.clearLocked()` → `setLock(null)`;
+  - `none` → `setLock` из наличия невосстановленного `backup`: баннер показывается, пока бэкап существует и тариф недостаточен.
+- Хелпер `applyPortfolioData(data: PortfolioData)` (вынести из текущего `handleImport`): восстанавливает `assets/nextId/cashBalance/useGroups/groups/nextGroupId`, сбрасывает расчёт/доп. деньги, но НЕ применяет `tier` из сохранённых данных (тариф всегда из сессии/БД).
+- Хелпер `resetWorkspace()` (вынести из `handleReset` без `PortfolioStorage.clear()`): все setState-сбросы.
+- `handleReset` («Сбросить всё») → `PortfolioStorage.clear()` + `resetWorkspace()`; резервную копию НЕ трогает (бэкап удаляется только при успешном восстановлении или перезаписи при парковке).
+- Баннер перед основным контентом при `lock != null`: тон `warning`, текст `buildLockMessage(lock.requiredTier)`; кнопка «Оплатить подписку» (primary-стиль) → `onClick` переключает на страницу «Тарифы» (`setActivePage("tariffs")`). Кнопка — заглушка будущей системы оплаты (комментарий в коде).
+- Компонент `Banner` расширяется опциональным пропом `action?: React.ReactNode` (кнопка размещается внутри баннера рядом с текстом).
+
+**Удаляемые:** функциональной смены тарифа на клиенте нет и раньше, доп. удаления не требуются. Существующий эффект «выключить useGroups при tier != pro» остаётся как защитный fallback.
 
 ## Classes
 
-**Новые:**
-- `AuthService` (`lib/auth-service.ts`) — статические методы (стиль проекта: `PortfolioStorage`, `MoexPriceService`). Клиент Supabase передаётся параметром (DI → тестируемо моками).
-
 **Изменяемые:**
-- `PortfolioRebalancer` (компонент) — расширен пропсами инициализации, убрана смена тарифа.
-- `PortfolioStorage` — не изменяется (tier из localStorage больше не используется).
+- `PortfolioStorage` (`lib/storage.ts`) — добавляются статические методы `saveLocked` / `loadLocked` / `clearLocked` и константы ключа/версии.
+- `PortfolioRebalancer` (`components/portfolio-rebalancer.tsx`) — состояние `lock`, guard-эффект, баннер, хелперы `applyPortfolioData` / `resetWorkspace`.
 
-**Удаляемые:** отсутствуют.
+**Новые / удаляемые:** классов не требуется (логика — чистые функции модуля `lib/portfolio-tier.ts`).
 
 ## Dependencies
 
-- `pnpm add @supabase/supabase-js @supabase/ssr` — выполнено на этапе реализации.
-
-**Настройка Supabase (вне кода):**
-1. **SMTP** (Project Settings → Auth → SMTP): Host/Port/User/Password/Sender (например Yandex 465 SSL), иначе письма не дойдут.
-2. **Auth → URL Configuration**: `Site URL` = `http://localhost:3000`; `Redirect URLs` += `http://localhost:3000/**`.
-3. Тариф вручную: `update public.profiles set tier = 'pro' where email = 'user@example.com';` (SQL Editor).
+Новых зависимостей нет (используются уже установленные `@supabase/supabase-js`, `@supabase/ssr`, Vitest).
 
 ## Testing
 
-- **Новые Vitest:**
-  - `lib/__tests__/email-validator.test.ts` — валидные/невалидные адреса.
-  - `lib/__tests__/auth-service.test.ts` — мок-клиент: успех, `email_taken`, `email_not_confirmed`, слабый пароль, fallback tier `free`.
-- **Существующие тесты** (`storage.test.ts`) не затрагиваются.
-- **Валидация вручную:** `pnpm test`; `pnpm build`; ручной прогон регистрации → подтверждение → вход → смена tier в БД → выход покажет `free`.
+**`lib/__tests__/portfolio-tier.test.ts` (новый):**
+- `computeRequiredTier`: 0/1/2 активов без групп → `free`; 3 актива → `basic`; `useGroups=true` → `pro`; `groups.length > 0` → `pro`; актив с `groupId != null` → `pro`; пустой массив → `free`.
+- `isTierSufficient`: free≤free, free<basic, basic<pro.
+- `buildLockMessage` / `getTierLabel`: точные тексты.
+- `decideLockState`: парковка при несоответствии без бэкапа; `reset-excess` при существующем бэкапе; `restore` при достаточном тарифе; `none` в корректных случаях; `none` + сохранение баннера при припаркованном бэкапе и недостаточном тарифе.
+
+**`lib/__tests__/storage.test.ts` (расширение):** roundtrip `saveLocked`/`loadLocked`, `clearLocked`, невалидный payload → `null`.
+
+**Валидация вручную:** `pnpm test`, `pnpm build`; затем сценарии:
+1. Гость (free) с сохранённым портфелем > 2 активов → перезагрузка: баннер «…тарифу «Базовый»…», рабочий стол пуст, копия в `portfolioRebalancerLockedData`.
+2. `update public.profiles set tier='basic' where email=...;` → пользователь перезагружает страницу → портфель восстановлен, баннер исчез, ключ бэкапа очищен.
+3. Тариф pro → free при портфеле с группами → баннер «…тарифу «Про»…».
+4. Импорт файла с 5 активами на free → немедленная парковка/сброс + баннер.
+5. Вход (SIGNED_IN) с поднятым тарифом → восстановление без перезагрузки; выход (SIGNED_OUT, free) с большим портфелем → повторная парковка.
 
 ## Implementation Order
 
-1. **БД:** миграция `create_profiles` применена ✅, типы сгенерированы ✅.
-2. **Конфигурация:** зависимости установлены ✅; `.env.example` + `.env.local`.
-3. **Ядро:** `lib/email-validator.ts` → `lib/auth-service.ts` → `lib/supabase/server.ts` + `lib/supabase/client.ts` + `database.types.ts`.
-4. **Типы:** `lib/types.ts` (`AuthUser`, `RebalancerServerProps`, `AuthResult`, константы).
-5. **SSR:** `proxy.ts`; async `app/page.tsx`.
-6. **UI:** `components/auth/auth-card.tsx`, `auth-form.tsx`, `app/login/page.tsx`, `app/register/page.tsx`.
-7. **Интеграция:** `portfolio-rebalancer.tsx`, `app-header.tsx`, `settings-page.tsx`, `tariffs-page.tsx`.
-8. **Репозиторий:** `supabase/migrations/<ts>_create_profiles.sql`, README, план.
-9. **Тесты:** Vitest; `pnpm test` + `pnpm build`.
-10. **E2E:** ручной прогон флоу; инструкции по SMTP.
+1. **Ядро:** создать `lib/portfolio-tier.ts` (константы, `computeRequiredTier`, `isTierSufficient`, `getTierLabel`, `buildLockMessage`, `LockDecision`, `decideLockState`).
+2. **Хранилище:** добавить в `lib/storage.ts` `LOCKED_STORAGE_KEY` / `LOCKED_DATA_VERSION` / `saveLocked` / `loadLocked` / `clearLocked`.
+3. **Тесты ядра:** `lib/__tests__/portfolio-tier.test.ts` + расширение `storage.test.ts`; прогнать `pnpm test`.
+4. **UI-интеграция:** `components/portfolio-rebalancer.tsx` — хелперы, guard-эффект, состояние `lock`, расширение `Banner` (проп `action`), баннер с кнопкой «Оплатить подписку».
+5. **Документация:** `README.md` — описание поведения, ключи localStorage, порядок ручной проверки.
+6. **Финальная проверка:** `pnpm test`, `pnpm build`, ручные сценарии из раздела Testing.

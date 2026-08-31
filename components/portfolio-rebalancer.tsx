@@ -9,6 +9,7 @@ import {
   Download,
   Info,
   Loader2,
+  Lock,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -19,6 +20,15 @@ import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { MoexPriceService, TBankProxyPriceService, type PriceResult } from "@/lib/price-service"
 import { AssetValidator } from "@/lib/validator"
 import { PortfolioStorage, normalizeAssets } from "@/lib/storage"
+import {
+  MAX_ASSETS_FREE,
+  MAX_ASSETS_PAID,
+  buildLockMessage,
+  computeRequiredTier,
+  decideLockState,
+  isTierSufficient,
+  type LockedPortfolioInfo,
+} from "@/lib/portfolio-tier"
 import { AuthService } from "@/lib/auth-service"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -28,6 +38,7 @@ import {
   type AuthUser,
   type Group,
   type Page,
+  type PortfolioData,
   type RebalancerServerProps,
   type Tier,
 } from "@/lib/types"
@@ -71,8 +82,12 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   const [useGroups, setUseGroups] = useState<boolean>(false)
   const [groups, setGroups] = useState<Group[]>([])
   const [nextGroupId, setNextGroupId] = useState<number>(1)
+  // Флаг: восстановление из localStorage завершено — guard тарифа начинает работать.
+  const [hydrated, setHydrated] = useState(false)
+  // Припаркованный из-за несоответствия тарифу портфель (показываем баннер).
+  const [lock, setLock] = useState<LockedPortfolioInfo | null>(null)
 
-  const maxAssets = useMemo(() => (tier === "free" ? 2 : 100), [tier])
+  const maxAssets = useMemo(() => (tier === "free" ? MAX_ASSETS_FREE : MAX_ASSETS_PAID), [tier])
 
   // Восстановление данных из localStorage после монтирования. Не читаем window
   // в фазе рендеринга, поэтому сервер и клиент формируют одинаковую разметку
@@ -80,13 +95,16 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   // он назначается вручную в БД либо равен 'free' для гостей.
   useEffect(() => {
     const saved = PortfolioStorage.load()
-    if (!saved) return
-    setAssets(normalizeAssets(saved.assets || []))
-    setNextId(saved.nextId)
-    setCashBalance(saved.cashBalance)
-    setUseGroups(saved.useGroups)
-    setGroups(saved.groups)
-    setNextGroupId(saved.nextGroupId)
+    if (saved) {
+      setAssets(normalizeAssets(saved.assets || []))
+      setNextId(saved.nextId)
+      setCashBalance(saved.cashBalance)
+      setUseGroups(saved.useGroups)
+      setGroups(saved.groups)
+      setNextGroupId(saved.nextGroupId)
+    }
+    // Гидратация завершена — guard соответствия тарифу может работать.
+    setHydrated(true)
   }, [])
 
   // Синхронизация сессии с сервером: вход/выход/обновление пользователя
@@ -137,6 +155,86 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     setCalculatedSpent(null)
     setCalculatedSales(null)
   }, [])
+
+  /** Применить полный снимок портфеля (восстановление из резервной копии / импорт). */
+  const applyPortfolioData = useCallback(
+    (data: PortfolioData) => {
+      setAssets(normalizeAssets(data.assets))
+      setNextId(data.nextId)
+      setCashBalance(data.cashBalance ?? 0)
+      // Тариф из данных не применяется: он назначается вручную в БД либо равен 'free'.
+      setUseGroups(data.useGroups ?? false)
+      setGroups(data.groups ?? [])
+      setNextGroupId(data.nextGroupId ?? 1)
+      setAdditionalCash(0)
+      setAppliedAdjustmentIds(new Set())
+      resetCalculation()
+      setError(null)
+    },
+    [resetCalculation],
+  )
+
+  /** Сбросить рабочий стол к пустому состоянию (без очистки localStorage). */
+  const resetWorkspace = useCallback(() => {
+    setAssets([])
+    setNextId(1)
+    setCashBalance(0)
+    setAdditionalCash(0)
+    setUseGroups(false)
+    setGroups([])
+    setNextGroupId(1)
+    setIsCalculated(false)
+    setCalculatedAnalysis(null)
+    setCalculatedSpent(null)
+    setCalculatedSales(null)
+    setEmptyTargetIds(new Set())
+    setAppliedAdjustmentIds(new Set())
+    setError(null)
+  }, [resetCalculation])
+
+  // Контроль соответствия портфеля тарифу. Начинает работать после гидратации
+  // из localStorage (hydrated), чтобы не «парковать» пустой рабочий стол.
+  // Срабатывает на смену тарифа (auth-события SIGNED_IN/USER_UPDATED, выход,
+  // перезагрузка) и на любые изменения портфеля.
+  useEffect(() => {
+    if (!hydrated) return
+
+    const currentPortfolio: PortfolioData = {
+      assets,
+      nextId,
+      cashBalance,
+      tier,
+      useGroups,
+      groups,
+      nextGroupId,
+    }
+    const backup = PortfolioStorage.loadLocked()
+    const decision = decideLockState({ tier, current: currentPortfolio, backup })
+
+    if (decision.action === "park") {
+      // Портфель не соответствует тарифу — сохраняем «прошлый портфель»
+      // в резервную копию и сбрасываем рабочий стол (приложение остаётся
+      // полностью рабочим в рамках текущего тарифа).
+      PortfolioStorage.saveLocked(currentPortfolio)
+      resetWorkspace()
+      setLock({ requiredTier: decision.requiredTier })
+    } else if (decision.action === "reset-excess") {
+      // Резервная копия уже есть — существующую НЕ затираем, только сбрасываем.
+      resetWorkspace()
+      setLock({ requiredTier: decision.requiredTier })
+    } else if (decision.action === "restore") {
+      // Тариф стал достаточным — восстанавливаем «прошлый портфель»,
+      // затирая текущий рабочий портфель.
+      applyPortfolioData(decision.backup)
+      PortfolioStorage.clearLocked()
+      setLock(null)
+    } else if (backup) {
+      // Резервная копия существует, но тариф её не покрывает — держим баннер.
+      const requiredTier = computeRequiredTier(backup)
+      setLock(isTierSufficient(requiredTier, tier) ? null : { requiredTier })
+    }
+    // Портфель соответствует тарифу и резервной копии нет — баннер не показываем.
+  }, [hydrated, tier, assets, nextId, cashBalance, useGroups, groups, nextGroupId, applyPortfolioData, resetWorkspace])
 
   const startPriceRefreshCooldown = useCallback(() => {
     if (tier !== "pro") return
@@ -427,44 +525,22 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
       if (!file) return
       try {
         const data = await PortfolioStorage.importFromFile(file)
-        setAssets(normalizeAssets(data.assets))
-        setNextId(data.nextId)
-        if (data.cashBalance != null) setCashBalance(data.cashBalance)
-        // Тариф из файла импорта не применяется: он назначается вручную в БД.
-        setUseGroups(data.useGroups ?? false)
-        setGroups(data.groups ?? [])
-        setNextGroupId(data.nextGroupId ?? 1)
-        setAdditionalCash(0)
-        setAppliedAdjustmentIds(new Set())
-        resetCalculation()
-        setError(null)
+        applyPortfolioData(data)
       } catch (err) {
         setError((err as Error).message)
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = ""
       }
     },
-    [resetCalculation],
+    [applyPortfolioData],
   )
 
   const handleReset = useCallback(() => {
     PortfolioStorage.clear()
-    setAssets([])
-    setNextId(1)
-    setCashBalance(0)
-    // Тариф не сбрасывается: он определяется сессией/БД.
-    setAdditionalCash(0)
-    setUseGroups(false)
-    setGroups([])
-    setNextGroupId(1)
-    setIsCalculated(false)
-    setCalculatedAnalysis(null)
-    setCalculatedSpent(null)
-    setCalculatedSales(null)
-    setEmptyTargetIds(new Set())
-    setAppliedAdjustmentIds(new Set())
-    setError(null)
-  }, [])
+    // Резервная копия («прошлый портфель») при сбросе не удаляется: она живёт
+    // до восстановления портфеля или перезаписи при следующей парковке.
+    resetWorkspace()
+  }, [resetWorkspace])
 
   const canCalculate = assets.length > 0 && !isCalculating
 
@@ -486,6 +562,26 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
           <TariffsPage tier={tier} />
         ) : (
           <div className="space-y-6">
+            {lock && (
+              <Banner
+                tone="warning"
+                icon={<Lock className="h-4 w-4" />}
+                action={
+                  // Заглушка системы оплаты: кнопка пока ведёт на страницу тарифов,
+                  // где сообщается, что тариф назначается вручную.
+                  <button
+                    type="button"
+                    onClick={() => setActivePage("tariffs")}
+                    className="shrink-0 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/30 transition-all hover:opacity-90 active:scale-95"
+                  >
+                    Оплатить подписку
+                  </button>
+                }
+              >
+                {buildLockMessage(lock.requiredTier)}
+              </Banner>
+            )}
+
             <PortfolioSummary
               analysis={analysis}
               assets={assets}
@@ -668,10 +764,12 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
 function Banner({
   tone,
   icon,
+  action,
   children,
 }: {
   tone: "negative" | "warning" | "info"
   icon: React.ReactNode
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   const styles = {
@@ -682,7 +780,8 @@ function Banner({
   return (
     <div className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm ${styles}`}>
       <span className="mt-0.5 shrink-0">{icon}</span>
-      <p className="text-pretty">{children}</p>
+      <p className="flex-1 text-pretty">{children}</p>
+      {action ? <span className="mt-0.5 shrink-0">{action}</span> : null}
     </div>
   )
 }

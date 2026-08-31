@@ -129,3 +129,24 @@ describe("PortfolioStorage", () => {
     expect(normalized[1]?.lotSize).toBe(3)
   })
 })
+describe("PortfolioStorage (резервная копия при несоответствии тарифу)", () => {
+  it("сохраняет и загружает резервную копию (saveLocked/loadLocked)", () => {
+    const data = makeData()
+    PortfolioStorage.saveLocked(data)
+
+    expect(PortfolioStorage.loadLocked()).toEqual(data)
+  })
+
+  it("clearLocked удаляет резервную копию", () => {
+    PortfolioStorage.saveLocked(makeData())
+    PortfolioStorage.clearLocked()
+
+    expect(PortfolioStorage.loadLocked()).toBeNull()
+  })
+
+  it("отвергает резервную копию с некорректной структурой", () => {
+    memory.set(PortfolioStorage.LOCKED_STORAGE_KEY, JSON.stringify({ assets: "не-массив" }))
+
+    expect(PortfolioStorage.loadLocked()).toBeNull()
+  })
+})
