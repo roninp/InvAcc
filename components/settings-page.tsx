@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Info, Plus, Trash2 } from "lucide-react"
+import { Check, Plus, Trash2 } from "lucide-react"
 import { GROUP_COLORS, type Group, type Tier } from "@/lib/types"
 
 const TIERS: { id: Tier; label: string; desc: string }[] = [
@@ -203,38 +203,6 @@ export function SettingsPage({
           </div>
         )}
 
-        {/* Комиссии брокера — заглушки */}
-        <div className="mt-6 space-y-4 border-t border-border pt-6 opacity-55">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-foreground">Процент брокера за покупку</div>
-              <div className="mt-0.5 text-sm text-muted-foreground">Комиссия при покупке, %</div>
-            </div>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-foreground">Процент брокера за продажу</div>
-              <div className="mt-0.5 text-sm text-muted-foreground">Комиссия при продаже, %</div>
-            </div>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
-          Настройки брокера пока неактивны и будут реализованы позже.
-        </div>
       </div>
     </div>
   )
