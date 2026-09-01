@@ -38,7 +38,7 @@ export function AppHeader({
               <ChartCandlestick className="h-5 w-5" strokeWidth={2.25} />
             </div>
             <div className="leading-tight">
-              <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Ребалансировка</h1>
+              <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Ребалансировка и учёт инвестиций</h1>
               <p className="hidden text-xs text-muted-foreground sm:block">Портфель Московской биржи</p>
             </div>
           </div>

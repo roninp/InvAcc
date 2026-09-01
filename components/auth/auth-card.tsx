@@ -14,7 +14,7 @@ export function AuthCard({ title, subtitle, children }: { title: string; subtitl
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
             <ChartCandlestick className="h-6 w-6" strokeWidth={2.25} />
           </div>
-          <h1 className="mt-4 text-xl font-semibold tracking-tight text-foreground">Ребалансировка</h1>
+          <h1 className="mt-4 text-xl font-semibold tracking-tight text-foreground">Ребалансировка и учёт инвестиций</h1>
           <p className="mt-1 text-sm text-muted-foreground">Портфель Московской биржи</p>
         </div>
 
