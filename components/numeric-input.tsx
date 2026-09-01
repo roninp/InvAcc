@@ -7,21 +7,26 @@ interface NumericInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   onChange: (value: number) => void
   isInteger?: boolean
   onEmptyChange?: (isEmpty: boolean) => void
+  /** Срабатывает на каждый валидный ввод ещё до blur. Позволяет родителю реагировать на ввод в реальном времени. */
+  onLiveChange?: (value: number) => void
 }
 
 /**
  * Интеллектуальное числовое поле ввода. Логика ввода сохранена из оригинала.
  */
-export function NumericInput({ value, onChange, isInteger = false, onEmptyChange, ...inputProps }: NumericInputProps) {
+export function NumericInput({ value, onChange, isInteger = false, onEmptyChange, onLiveChange, ...inputProps }: NumericInputProps) {
   const [rawValue, setRawValue] = useState(value != null ? String(value) : "")
   const onEmptyChangeRef = useRef(onEmptyChange)
   onEmptyChangeRef.current = onEmptyChange
+  const onLiveChangeRef = useRef(onLiveChange)
+  onLiveChangeRef.current = onLiveChange
 
   useEffect(() => {
     setRawValue(value != null ? String(value) : "")
     if (value != null && value !== 0) {
       onEmptyChangeRef.current?.(false)
     }
+    onLiveChangeRef.current?.(value ?? 0)
   }, [value])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,11 +35,13 @@ export function NumericInput({ value, onChange, isInteger = false, onEmptyChange
       if (v === "" || /^\d+$/.test(v)) {
         setRawValue(v)
         onEmptyChange?.(v === "")
+        onLiveChangeRef.current?.(v === "" ? 0 : Number.parseInt(v, 10))
       }
     } else {
       if (v === "" || /^\d+\.?\d*$/.test(v) || /^\d*\.?\d+$/.test(v)) {
         setRawValue(v)
         onEmptyChange?.(v === "")
+        onLiveChangeRef.current?.(v === "" ? 0 : Number.parseFloat(v))
       }
     }
   }
@@ -44,6 +51,7 @@ export function NumericInput({ value, onChange, isInteger = false, onEmptyChange
     if (trimmed === "") {
       onChange(0)
       setRawValue("0")
+      onLiveChangeRef.current?.(0)
       return
     }
     const parsed = isInteger ? Number.parseInt(trimmed, 10) : Number.parseFloat(trimmed)
@@ -51,6 +59,7 @@ export function NumericInput({ value, onChange, isInteger = false, onEmptyChange
     onChange(num)
     setRawValue(String(num))
     onEmptyChange?.(false)
+    onLiveChangeRef.current?.(num)
   }
 
   return (

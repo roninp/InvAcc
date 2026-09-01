@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback, useState } from "react"
 import { Plus, Wallet, TrendingUp, Coins } from "lucide-react"
 import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { formatRub } from "@/lib/format"
@@ -21,8 +22,21 @@ export function PortfolioSummary({
   onCashBalanceChange: (value: number) => void
   additionalCash: number
   onAdditionalCashChange: (value: number) => void
-  onAddCash: () => void
+  onAddCash: (amount: number) => void
 }) {
+  const [canAddCash, setCanAddCash] = useState(false)
+  const [liveAddCash, setLiveAddCash] = useState(0)
+  const [addCashResetKey, setAddCashResetKey] = useState(0)
+
+  const handleAddCashClick = useCallback(() => {
+    const amount = liveAddCash > 0 ? liveAddCash : additionalCash
+    if (amount > 0) {
+      onAddCash(amount)
+      setCanAddCash(false)
+      setLiveAddCash(0)
+      setAddCashResetKey((k) => k + 1)
+    }
+  }, [liveAddCash, additionalCash, onAddCash])
   const source = analysis.length > 0 ? analysis : assets
   const totalValueRaw = source.reduce(
     (sum, a) => sum + PortfolioCalculator.floorMoney(a.quantity * PortfolioCalculator.getLotSize(a) * a.price),
@@ -65,21 +79,26 @@ export function PortfolioSummary({
             value={cashBalance || null}
             onChange={onCashBalanceChange}
             aria-label="Остаток денежных средств"
-            className="w-full rounded-lg border border-transparent bg-transparent px-0 py-0.5 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground outline-none transition-colors hover:border-border focus:border-ring focus:bg-background focus:px-2"
+            className="w-full rounded-lg border border-input bg-background px-3 py-1.5 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground outline-none transition-shadow hover:border-ring/60 focus:ring-2 focus:ring-ring/40"
             placeholder="0.00"
           />
         </div>
         <div className="mt-3 flex gap-2">
           <NumericInput
+            key={addCashResetKey}
             value={additionalCash || null}
             onChange={onAdditionalCashChange}
+            onLiveChange={(value) => {
+              setCanAddCash(value > 0)
+              setLiveAddCash(value)
+            }}
             aria-label="Сумма для добавления"
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-right font-mono text-sm tabular-nums outline-none transition-shadow focus:ring-2 focus:ring-ring/40"
             placeholder="Внести сумму"
           />
           <button
-            onClick={onAddCash}
-            disabled={additionalCash <= 0}
+            onClick={handleAddCashClick}
+            disabled={!canAddCash && additionalCash <= 0}
             className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-foreground px-3 py-2 text-sm font-medium text-background transition-all duration-200 hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus className="h-4 w-4" strokeWidth={2.5} />

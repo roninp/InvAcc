@@ -368,12 +368,12 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     setCashBalance(PortfolioCalculator.floorMoney(value))
   }, [])
 
-  const handleAddCash = useCallback(() => {
-    if (additionalCash > 0) {
-      setCashBalance((prev) => PortfolioCalculator.floorMoney(prev + additionalCash))
+  const handleAddCash = useCallback((amount: number) => {
+    if (amount > 0) {
+      setCashBalance((prev) => PortfolioCalculator.floorMoney(prev + amount))
       setAdditionalCash(0)
     }
-  }, [additionalCash])
+  }, [])
 
   const handleCalculate = useCallback(() => {
     setIsCalculating(true)
