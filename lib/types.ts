@@ -39,6 +39,30 @@ export interface PortfolioData {
   nextGroupId: number
 }
 
+/** Метаданные портфеля для переключателя и панели управления. */
+export interface PortfolioMeta {
+  id: number
+  name: string
+  /** ISO-дата создания; используется для «кто остаётся» при парковке лишних портфелей. */
+  createdAt: string
+}
+
+/** Индекс коллекции портфелей (хранится в `portfolioRebalancerMeta`). */
+export interface PortfolioCollectionMeta {
+  version: number
+  /** Монотонный счётчик id портфелей (id не переиспользуются). */
+  nextPortfolioId: number
+  activePortfolioId: number
+  /** Порядок массива = порядок показа в переключателе. */
+  portfolios: PortfolioMeta[]
+}
+
+/** Запись припаркованной коллекции портфелей — мета + данные целиком. */
+export interface LockedPortfolioEntry {
+  meta: PortfolioMeta
+  data: PortfolioData
+}
+
 /** Минимальная длина пароля при регистрации (требование supabase-js — 8). */
 export const MIN_PASSWORD_LENGTH = 8
 

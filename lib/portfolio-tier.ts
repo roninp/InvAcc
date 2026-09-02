@@ -1,4 +1,4 @@
-import type { PortfolioData, Tier } from "./types"
+import type { LockedPortfolioEntry, PortfolioData, PortfolioMeta, Tier } from "./types"
 
 /**
  * Контроль соответствия портфеля тарифу — чистая бизнес-логика БЕЗ UI-зависимостей.
@@ -26,6 +26,25 @@ export const MAX_ASSETS_FREE = 2
 /** Максимум активов на платных тарифах. */
 export const MAX_ASSETS_PAID = 100
 
+/** Максимум портфелей на бесплатном тарифе. */
+export const MAX_PORTFOLIOS_FREE = 1
+/** Максимум портфелей на тарифе «Базовый». */
+export const MAX_PORTFOLIOS_BASIC = 1
+/** Максимум портфелей на тарифе «Про». */
+export const MAX_PORTFOLIOS_PRO = 5
+
+/** Доступное число портфелей для текущего тарифа. */
+export function maxPortfoliosForTier(tier: Tier): number {
+  switch (tier) {
+    case "free":
+      return MAX_PORTFOLIOS_FREE
+    case "basic":
+      return MAX_PORTFOLIOS_BASIC
+    case "pro":
+      return MAX_PORTFOLIOS_PRO
+  }
+}
+
 /** Информация о «припаркованном» (заблокированном тарифом) портфеле для UI. */
 export interface LockedPortfolioInfo {
   requiredTier: Tier
@@ -46,14 +65,25 @@ export type LockDecision =
  */
 export function computeRequiredTier(
   portfolio: Pick<PortfolioData, "assets" | "useGroups" | "groups">,
+  portfolioCount = 1,
 ): Tier {
   const usesGroups =
     portfolio.useGroups ||
     portfolio.groups.length > 0 ||
     portfolio.assets.some((asset) => asset.groupId != null)
-  if (usesGroups) return "pro"
-  if (portfolio.assets.length > MAX_ASSETS_FREE) return "basic"
-  return "free"
+  let contentTier: Tier = "free"
+  if (usesGroups) contentTier = "pro"
+  else if (portfolio.assets.length > MAX_ASSETS_FREE) contentTier = "basic"
+
+  // Число портфелей: 2+ требуют тариф «Про» (free и basic — по одному портфелю).
+  const countTier: Tier =
+    portfolioCount > MAX_PORTFOLIOS_BASIC
+      ? "pro"
+      : portfolioCount > MAX_PORTFOLIOS_FREE
+        ? "basic"
+        : "free"
+
+  return TIER_RANK[contentTier] >= TIER_RANK[countTier] ? contentTier : countTier
 }
 
 /** Достаточен ли текущий тариф для портфеля, требующего тариф `required`. */
@@ -110,6 +140,59 @@ export function decideLockState(input: {
 
   if (current && !isTierSufficient(computeRequiredTier(current), tier)) {
     return { action: "park", requiredTier: computeRequiredTier(current) }
+  }
+
+  return { action: "none" }
+}
+
+/** Решение guard-эффекта по числу портфелей относительно тарифа. */
+export type PortfolioCountDecision =
+  | { action: "none" }
+  | { action: "park-extra"; activeId: number; extraIds: number[] }
+  | { action: "restore"; restoreAll: true }
+
+/**
+ * Guard числа портфелей:
+ * 1) Припаркованные портфели есть, и текущий тариф покрывает всё множество
+ *    (рабочие + припаркованные) → `restore`.
+ * 2) Рабочих портфелей больше лимита тарифа → `park-extra`: остаётся активный
+ *    и (если лимит позволяет) самые старые по `createdAt` (при равенстве —
+ *    меньший `id`), остальные id попадают в `extraIds`.
+ * 3) Иначе → `none`.
+ */
+export function decidePortfolioCountLock(input: {
+  tier: Tier
+  portfolios: PortfolioMeta[]
+  activeId: number
+  locked: LockedPortfolioEntry[] | null
+}): PortfolioCountDecision {
+  const { tier, portfolios, activeId, locked } = input
+  const limit = maxPortfoliosForTier(tier)
+
+  if (locked && locked.length > 0 && portfolios.length + locked.length <= limit) {
+    return { action: "restore", restoreAll: true }
+  }
+
+  if (portfolios.length > limit) {
+    const hasActive = portfolios.some((p) => p.id === activeId)
+    const keepId = hasActive ? activeId : (portfolios[0]?.id ?? activeId)
+    const keptIds = new Set<number>([keepId])
+
+    const sorted = [...portfolios]
+      .filter((p) => p.id !== keepId)
+      .sort((a, b) => {
+        const byDate = a.createdAt.localeCompare(b.createdAt)
+        if (byDate !== 0) return byDate
+        return a.id - b.id
+      })
+
+    for (const p of sorted) {
+      if (keptIds.size >= limit) break
+      keptIds.add(p.id)
+    }
+
+    const extraIds = portfolios.filter((p) => !keptIds.has(p.id)).map((p) => p.id)
+    return { action: "park-extra", activeId: keepId, extraIds }
   }
 
   return { action: "none" }

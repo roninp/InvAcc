@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest"
 import {
   MAX_ASSETS_FREE,
+  MAX_PORTFOLIOS_PRO,
   buildLockMessage,
   computeRequiredTier,
   decideLockState,
+  decidePortfolioCountLock,
   getTierLabel,
   isTierSufficient,
+  maxPortfoliosForTier,
 } from "../portfolio-tier"
-import type { Asset, Group, PortfolioData } from "../types"
+import type { Asset, Group, LockedPortfolioEntry, PortfolioData, PortfolioMeta } from "../types"
 
 /**
  * Unit-тесты контроля соответствия портфеля тарифу (lib/portfolio-tier.ts).
@@ -142,5 +145,88 @@ describe("decideLockState", () => {
 
     expect(decision.action).toBe("park")
     if (decision.action === "park") expect(decision.requiredTier).toBe("pro")
+  })
+})
+
+describe("maxPortfoliosForTier", () => {
+  it("задаёт лимиты по тарифам: free/basic — по одному портфелю, pro — пять", () => {
+    expect(maxPortfoliosForTier("free")).toBe(1)
+    expect(maxPortfoliosForTier("basic")).toBe(1)
+    expect(MAX_PORTFOLIOS_PRO).toBe(5)
+    expect(maxPortfoliosForTier("pro")).toBe(5)
+  })
+})
+
+describe("computeRequiredTier (число портфелей)", () => {
+  it("один портфель — решение по контенту (обратная совместимость с дефолтом)", () => {
+    expect(computeRequiredTier(makeData({ assets: [] }))).toBe("free")
+    expect(computeRequiredTier(makeData({ assets: manyAssets(MAX_ASSETS_FREE + 1) }))).toBe("basic")
+    expect(computeRequiredTier(makeData({ useGroups: true }))).toBe("pro")
+  })
+
+  it("два и более портфелей требуют тариф «Про»", () => {
+    expect(computeRequiredTier(makeData({ assets: [] }), 2)).toBe("pro")
+    expect(computeRequiredTier(makeData({ assets: [] }), 5)).toBe("pro")
+    expect(computeRequiredTier(makeData({ assets: manyAssets(MAX_ASSETS_FREE) }), 5)).toBe("pro")
+    expect(computeRequiredTier(makeData({ useGroups: true }), 5)).toBe("pro")
+  })
+})
+
+describe("decidePortfolioCountLock", () => {
+  const meta = (id: number, day: number): PortfolioMeta => ({
+    id,
+    name: `Портфель ${id}`,
+    createdAt: `2026-01-${String(day).padStart(2, "0")}T00:00:00.000Z`,
+  })
+  const entry = (id: number, day: number): LockedPortfolioEntry => ({
+    meta: meta(id, day),
+    data: makeData(),
+  })
+  const fivePortfolios = Array.from({ length: 5 }, (_, index) => meta(index + 1, index + 1))
+
+  it("тариф «Про» и число портфелей в лимите — none", () => {
+    expect(
+      decidePortfolioCountLock({ tier: "pro", portfolios: fivePortfolios, activeId: 3, locked: null }),
+    ).toEqual({ action: "none" })
+  })
+
+  it("на бесплатном тарифе с 5 портфелями паркует все, кроме активного", () => {
+    const decision = decidePortfolioCountLock({ tier: "free", portfolios: fivePortfolios, activeId: 3, locked: null })
+
+    expect(decision.action).toBe("park-extra")
+    if (decision.action === "park-extra") {
+      expect(decision.activeId).toBe(3)
+      expect(decision.extraIds).toHaveLength(4)
+      expect(decision.extraIds).not.toContain(3)
+    }
+  })
+
+  it("при парковке остаётся активный портфель (даже если он — не самый старый)", () => {
+    const decision = decidePortfolioCountLock({ tier: "free", portfolios: fivePortfolios, activeId: 5, locked: null })
+
+    expect(decision.action).toBe("park-extra")
+    if (decision.action === "park-extra") expect(decision.extraIds).toEqual([1, 2, 3, 4])
+  })
+
+  it("восстанавливает припаркованную коллекцию, когда тариф покрывает полное множество", () => {
+    const decision = decidePortfolioCountLock({
+      tier: "pro",
+      portfolios: [meta(1, 1)],
+      activeId: 1,
+      locked: [entry(2, 2), entry(3, 3)],
+    })
+
+    expect(decision).toEqual({ action: "restore", restoreAll: true })
+  })
+
+  it("не восстанавливает и не паркует, пока тариф не покрывает полное множество", () => {
+    const decision = decidePortfolioCountLock({
+      tier: "free",
+      portfolios: [meta(1, 1)],
+      activeId: 1,
+      locked: [entry(2, 2), entry(3, 3)],
+    })
+
+    expect(decision.action).toBe("none")
   })
 })

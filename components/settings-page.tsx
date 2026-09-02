@@ -5,9 +5,9 @@ import { Check, Plus, Trash2 } from "lucide-react"
 import { GROUP_COLORS, type Group, type Tier } from "@/lib/types"
 
 const TIERS: { id: Tier; label: string; desc: string }[] = [
-  { id: "free", label: "Бесплатный", desc: "До 2 активов" },
-  { id: "basic", label: "Базовый", desc: "До 100 активов" },
-  { id: "pro", label: "Про", desc: "Группы + быстрые цены" },
+  { id: "free", label: "Бесплатный", desc: "Один портфель, до 2 активов" },
+  { id: "basic", label: "Базовый", desc: "Один портфель, до 100 активов" },
+  { id: "pro", label: "Про", desc: "До 5 портфелей, группы, быстрые цены" },
 ]
 
 const TIER_LABEL: Record<Tier, string> = {

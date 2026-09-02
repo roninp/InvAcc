@@ -26,7 +26,9 @@ import {
   buildLockMessage,
   computeRequiredTier,
   decideLockState,
+  decidePortfolioCountLock,
   isTierSufficient,
+  maxPortfoliosForTier,
   type LockedPortfolioInfo,
 } from "@/lib/portfolio-tier"
 import { AuthService } from "@/lib/auth-service"
@@ -37,8 +39,10 @@ import {
   type AssetAnalysis,
   type AuthUser,
   type Group,
+  type LockedPortfolioEntry,
   type Page,
   type PortfolioData,
+  type PortfolioMeta,
   type RebalancerServerProps,
   type Tier,
 } from "@/lib/types"
@@ -48,6 +52,7 @@ import { GroupAllocations } from "./group-allocations"
 import { AssetTable } from "./asset-table"
 import { SettingsPage } from "./settings-page"
 import { HomePage } from "./home-page"
+import { PortfolioManager } from "./portfolio-manager"
 
 export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServerProps) {
   const [assets, setAssets] = useState<Asset[]>([])
@@ -86,6 +91,10 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   const [hydrated, setHydrated] = useState(false)
   // Припаркованный из-за несоответствия тарифу портфель (показываем баннер).
   const [lock, setLock] = useState<LockedPortfolioInfo | null>(null)
+  // Коллекция портфелей: индекс, активный портфель, счётчик припаркованных.
+  const [portfolios, setPortfolios] = useState<PortfolioMeta[]>([])
+  const [activePortfolioId, setActivePortfolioId] = useState(1)
+  const [portfolioLockInfo, setPortfolioLockInfo] = useState<{ parked: number } | null>(null)
 
   const maxAssets = useMemo(() => (tier === "free" ? MAX_ASSETS_FREE : MAX_ASSETS_PAID), [tier])
 
@@ -94,7 +103,9 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   // и гидратация проходит без ошибок. Тариф из localStorage не читается:
   // он назначается вручную в БД либо равен 'free' для гостей.
   useEffect(() => {
-    const saved = PortfolioStorage.load()
+    const meta = PortfolioStorage.loadMeta()
+    const activeId = meta.activePortfolioId
+    const saved = PortfolioStorage.loadPortfolioData(activeId)
     if (saved) {
       setAssets(normalizeAssets(saved.assets || []))
       setNextId(saved.nextId)
@@ -103,6 +114,8 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
       setGroups(saved.groups)
       setNextGroupId(saved.nextGroupId)
     }
+    setPortfolios(meta.portfolios)
+    setActivePortfolioId(activeId)
     // Гидратация завершена — guard соответствия тарифу может работать.
     setHydrated(true)
   }, [])
@@ -235,6 +248,76 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     }
     // Портфель соответствует тарифу и резервной копии нет — баннер не показываем.
   }, [hydrated, tier, assets, nextId, cashBalance, useGroups, groups, nextGroupId, applyPortfolioData, resetWorkspace])
+
+  // Контроль ЧИСЛА портфелей относительно тарифа. Работает после гидратации,
+  // каждый раз читает авторитетные данные из localStorage и идемпотентен:
+  // после парковки/восстановления следующий прогон даёт «none».
+  useEffect(() => {
+    if (!hydrated) return
+
+    const meta = PortfolioStorage.loadMeta()
+    const locked = PortfolioStorage.loadLockedCollection()
+    const decision = decidePortfolioCountLock({
+      tier,
+      portfolios: meta.portfolios,
+      activeId: meta.activePortfolioId,
+      locked,
+    })
+
+    if (decision.action === "none") return
+
+    if (decision.action === "park-extra") {
+      // Лишние портфели уезжают в резервную коллекцию; остаётся активный
+      // и (до лимита тарифа) самые старые.
+      const merged = new Map<number, LockedPortfolioEntry>(
+        (locked ?? []).map((entry) => [entry.meta.id, entry]),
+      )
+      const metaById = new Map(meta.portfolios.map((p) => [p.id, p]))
+      for (const id of decision.extraIds) {
+        const data = PortfolioStorage.loadPortfolioData(id)
+        const entryMeta = metaById.get(id)
+        if (!data || !entryMeta) continue
+        merged.set(id, { meta: entryMeta, data })
+      }
+      PortfolioStorage.saveLockedCollection(Array.from(merged.values()))
+
+      const extraSet = new Set(decision.extraIds)
+      const kept = meta.portfolios.filter((p) => !extraSet.has(p.id))
+      const active = kept.find((p) => p.id === decision.activeId) ?? kept[0]
+      if (!active) return // инвариант «хотя бы один портфель» нарушен — аварийный выход
+      PortfolioStorage.saveMeta({
+        version: meta.version,
+        nextPortfolioId: meta.nextPortfolioId,
+        activePortfolioId: active.id,
+        portfolios: kept,
+      })
+      setPortfolios(kept)
+      setPortfolioLockInfo({ parked: merged.size })
+      if (active.id !== activePortfolioId) {
+        setActivePortfolioId(active.id)
+        const data = PortfolioStorage.loadPortfolioData(active.id) ?? PortfolioStorage.emptyPortfolio()
+        applyPortfolioData(data)
+      }
+      return
+    }
+
+    // decision.action === "restore": тариф покрывает рабочие + припаркованные.
+    const existing = new Map(meta.portfolios.map((p) => [p.id, p]))
+    for (const entry of locked ?? []) {
+      PortfolioStorage.savePortfolioData(entry.meta.id, entry.data)
+      existing.set(entry.meta.id, entry.meta)
+    }
+    const restored = Array.from(existing.values())
+    PortfolioStorage.saveMeta({
+      version: meta.version,
+      nextPortfolioId: meta.nextPortfolioId,
+      activePortfolioId: meta.activePortfolioId,
+      portfolios: restored,
+    })
+    PortfolioStorage.clearLockedCollection()
+    setPortfolios(restored)
+    setPortfolioLockInfo(null)
+  }, [hydrated, tier, portfolios, activePortfolioId, applyPortfolioData])
 
   const startPriceRefreshCooldown = useCallback(() => {
     if (tier !== "pro") return
@@ -500,8 +583,16 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
       skipFirstSaveRef.current = false
       return
     }
-    PortfolioStorage.save({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId })
-  }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId])
+    PortfolioStorage.savePortfolioData(activePortfolioId, {
+      assets,
+      nextId,
+      cashBalance,
+      tier,
+      useGroups,
+      groups,
+      nextGroupId,
+    })
+  }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId, activePortfolioId])
 
   // Загружаем цены при первом монтировании.
   useEffect(() => {
@@ -536,17 +627,124 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   )
 
   const handleReset = useCallback(() => {
-    PortfolioStorage.clear()
-    // Резервная копия («прошлый портфель») при сбросе не удаляется: она живёт
-    // до восстановления портфеля или перезаписи при следующей парковке.
+    // Сброс затрагивает только активный портфель. Резервные копии
+    // («прошлый портфель» и припаркованные портфели) при этом не удаляются.
+    PortfolioStorage.removePortfolioData(activePortfolioId)
     resetWorkspace()
-  }, [resetWorkspace])
+  }, [resetWorkspace, activePortfolioId])
+
+  /** Сохранить текущий портфель и переключиться на другой. */
+  const handleSelectPortfolio = useCallback(
+    (id: number) => {
+      if (id === activePortfolioId) {
+        setActivePage("portfolio")
+        return
+      }
+      // Сохраняем текущий рабочий портфель до переключения.
+      PortfolioStorage.savePortfolioData(activePortfolioId, {
+        assets,
+        nextId,
+        cashBalance,
+        tier,
+        useGroups,
+        groups,
+        nextGroupId,
+      })
+      const data = PortfolioStorage.loadPortfolioData(id) ?? PortfolioStorage.emptyPortfolio()
+      applyPortfolioData(data)
+      setActivePortfolioId(id)
+      const meta = PortfolioStorage.loadMeta()
+      PortfolioStorage.saveMeta({ ...meta, activePortfolioId: id })
+      setActivePage("portfolio")
+      setError(null)
+    },
+    [activePortfolioId, assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId, applyPortfolioData],
+  )
+
+  /** Создать новый портфель (не больше лимита тарифа). */
+  const handleCreatePortfolio = useCallback(() => {
+    const meta = PortfolioStorage.loadMeta()
+    if (meta.portfolios.length >= maxPortfoliosForTier(tier)) return
+    const id = meta.nextPortfolioId
+    const newMeta: PortfolioMeta = { id, name: `Портфель ${id}`, createdAt: new Date().toISOString() }
+    PortfolioStorage.savePortfolioData(id, PortfolioStorage.emptyPortfolio())
+    // Фиксируем текущий рабочий портфель и активируем новый (пустой).
+    PortfolioStorage.savePortfolioData(activePortfolioId, {
+      assets,
+      nextId,
+      cashBalance,
+      tier,
+      useGroups,
+      groups,
+      nextGroupId,
+    })
+    PortfolioStorage.saveMeta({
+      version: meta.version,
+      nextPortfolioId: id + 1,
+      activePortfolioId: id,
+      portfolios: [...meta.portfolios, newMeta],
+    })
+    setPortfolios([...meta.portfolios, newMeta])
+    setActivePortfolioId(id)
+    applyPortfolioData(PortfolioStorage.emptyPortfolio())
+    setActivePage("portfolio")
+    setError(null)
+  }, [tier, activePortfolioId, assets, nextId, cashBalance, useGroups, groups, nextGroupId, applyPortfolioData])
+
+  /** Переименовать портфель. */
+  const handleRenamePortfolio = useCallback((id: number, name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.length > 40) return
+    const meta = PortfolioStorage.loadMeta()
+    const next = meta.portfolios.map((p) => (p.id === id ? { ...p, name: trimmed } : p))
+    PortfolioStorage.saveMeta({ ...meta, portfolios: next })
+    setPortfolios(next)
+  }, [])
+
+  /** Удалить портфель (последний удалить нельзя). */
+  const handleDeletePortfolio = useCallback(
+    (id: number) => {
+      const meta = PortfolioStorage.loadMeta()
+      if (meta.portfolios.length <= 1) return
+      PortfolioStorage.removePortfolioData(id)
+      const nextPortfolios = meta.portfolios.filter((p) => p.id !== id)
+      let nextActiveId = meta.activePortfolioId
+      if (id === meta.activePortfolioId) {
+        nextActiveId = nextPortfolios[0]?.id ?? 1
+        const data = PortfolioStorage.loadPortfolioData(nextActiveId) ?? PortfolioStorage.emptyPortfolio()
+        applyPortfolioData(data)
+      }
+      PortfolioStorage.saveMeta({ ...meta, portfolios: nextPortfolios, activePortfolioId: nextActiveId })
+      setPortfolios(nextPortfolios)
+      setActivePortfolioId(nextActiveId)
+      resetCalculation()
+      setError(null)
+    },
+    [applyPortfolioData, resetCalculation],
+  )
 
   const canCalculate = assets.length > 0 && !isCalculating
 
+  // Текущий портфель для панели управления (инвариант «хотя бы один портфель»).
+  const currentPortfolioMeta =
+    portfolios.find((p) => p.id === activePortfolioId) ?? portfolios[0] ?? {
+      id: activePortfolioId,
+      name: "Портфель",
+      createdAt: new Date(0).toISOString(),
+    }
+
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader activePage={activePage} onNavigate={setActivePage} tier={tier} user={user} onSignOut={handleSignOut} />
+      <AppHeader
+        activePage={activePage}
+        onNavigate={setActivePage}
+        tier={tier}
+        user={user}
+        portfolios={portfolios}
+        activePortfolioId={activePortfolioId}
+        onSelectPortfolio={handleSelectPortfolio}
+        onSignOut={handleSignOut}
+      />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {activePage === "home" ? (
@@ -562,6 +760,23 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
           />
         ) : (
           <div className="space-y-6">
+            <PortfolioManager
+              key={activePortfolioId}
+              portfolio={currentPortfolioMeta}
+              count={portfolios.length}
+              max={maxPortfoliosForTier(tier)}
+              canCreate={portfolios.length < maxPortfoliosForTier(tier)}
+              canDelete={portfolios.length > 1}
+              onCreate={handleCreatePortfolio}
+              onRename={(name) => handleRenamePortfolio(activePortfolioId, name)}
+              onDelete={() => handleDeletePortfolio(activePortfolioId)}
+            />
+            {portfolioLockInfo && (
+              <Banner tone="info" icon={<Info className="h-4 w-4" />}>
+                На вашем тарифе доступен один портфель. Ещё {portfolioLockInfo.parked} сохранены и автоматически
+                вернутся после повышения тарифа до «Про».
+              </Banner>
+            )}
             {lock && (
               <Banner
                 tone="warning"

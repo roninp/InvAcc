@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { ChartCandlestick, House, Layers, LogIn, LogOut, Settings } from "lucide-react"
-import type { AuthUser, Page, Tier } from "@/lib/types"
+import type { AuthUser, Page, PortfolioMeta, Tier } from "@/lib/types"
 
 const NAV: { id: Page; label: string; icon: typeof Layers }[] = [
   { id: "home", label: "Главная", icon: House },
@@ -21,12 +21,18 @@ export function AppHeader({
   onNavigate,
   tier,
   user,
+  portfolios,
+  activePortfolioId,
+  onSelectPortfolio,
   onSignOut,
 }: {
   activePage: Page
   onNavigate: (page: Page) => void
   tier: Tier
   user: AuthUser | null
+  portfolios: PortfolioMeta[]
+  activePortfolioId: number
+  onSelectPortfolio: (id: number) => void
   onSignOut: () => void
 }) {
   return (
@@ -44,6 +50,22 @@ export function AppHeader({
           </div>
 
           <div className="flex items-center gap-3">
+            <label className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex">
+              <Layers className="h-3.5 w-3.5" strokeWidth={2.25} />
+              <select
+                value={activePortfolioId}
+                onChange={(e) => onSelectPortfolio(Number(e.target.value))}
+                className="cursor-pointer bg-transparent text-xs font-semibold text-foreground outline-none"
+                title="Переключить портфель"
+                aria-label="Портфель"
+              >
+                {portfolios.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               Тариф: <span className="text-foreground">{TIER_LABEL[tier]}</span>
