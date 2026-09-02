@@ -69,32 +69,32 @@ const AUDIENCE: { title: string; description: string; icon: typeof Users }[] = [
 
 export function HomePage({ tier, onNavigate }: { tier: Tier; onNavigate: (page: Page) => void }) {
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       {/* Hero: краткое описание сервиса */}
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-card p-8 sm:p-10">
+      <section className="relative overflow-hidden rounded-3xl border border-border bg-card p-6 sm:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
         />
-        <div className="relative max-w-2xl">
+        <div className="relative max-w-2xl space-y-6">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 text-primary" strokeWidth={2.25} />
             Бесплатный старт для частных инвесторов
           </span>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
             Ребалансировка и учёт инвестиций
           </h2>
-          <p className="mt-3 text-sm text-muted-foreground text-pretty sm:text-base">
+          <p className="text-sm text-muted-foreground text-pretty sm:text-base">
             Инструмент для частных инвесторов Московской биржи: задайте целевые доли портфеля — и получайте точные
             расчёты, что и когда докупить или продать. Цены подтягиваются автоматически, свободные деньги учитываются,
             а результат сохраняется прямо в браузере.
           </p>
 
-          <div className="mt-6 grid gap-4">
+          <div className="grid gap-5">
             {AUDIENCE.map((item) => {
               const Icon = item.icon
               return (
-                <div key={item.title} className="flex items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4">
+                <div key={item.title} className="flex items-start gap-3 rounded-2xl border border-border bg-muted/30 p-6">
                   <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Icon className="h-4.5 w-4.5" strokeWidth={2} />
                   </span>
@@ -110,7 +110,7 @@ export function HomePage({ tier, onNavigate }: { tier: Tier; onNavigate: (page: 
           <button
             type="button"
             onClick={() => onNavigate("portfolio")}
-            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/30 transition-all hover:opacity-90 active:scale-95"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/30 transition-all hover:opacity-90 active:scale-95"
           >
             <LineChart className="h-4 w-4" strokeWidth={2.25} />
             Перейти к портфелю
