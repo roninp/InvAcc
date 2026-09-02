@@ -1,6 +1,6 @@
 export type Tier = "free" | "basic" | "pro"
 
-export type Page = "portfolio" | "settings" | "tariffs"
+export type Page = "home" | "portfolio" | "settings"
 
 export interface Asset {
   id: number

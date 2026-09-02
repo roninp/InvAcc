@@ -47,7 +47,7 @@ import { PortfolioSummary } from "./portfolio-summary"
 import { GroupAllocations } from "./group-allocations"
 import { AssetTable } from "./asset-table"
 import { SettingsPage } from "./settings-page"
-import { TariffsPage } from "./tariffs-page"
+import { HomePage } from "./home-page"
 
 export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServerProps) {
   const [assets, setAssets] = useState<Asset[]>([])
@@ -76,7 +76,7 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   const [emptyTargetIds, setEmptyTargetIds] = useState<Set<number>>(() => new Set())
   const [appliedAdjustmentIds, setAppliedAdjustmentIds] = useState<Set<number>>(() => new Set())
 
-  const [activePage, setActivePage] = useState<Page>("portfolio")
+  const [activePage, setActivePage] = useState<Page>("home")
   const [tier, setTier] = useState<Tier>(initialTier)
   const [user, setUser] = useState<AuthUser | null>(initialUser)
   const [useGroups, setUseGroups] = useState<boolean>(false)
@@ -549,7 +549,9 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
       <AppHeader activePage={activePage} onNavigate={setActivePage} tier={tier} user={user} onSignOut={handleSignOut} />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {activePage === "settings" ? (
+        {activePage === "home" ? (
+          <HomePage tier={tier} onNavigate={setActivePage} />
+        ) : activePage === "settings" ? (
           <SettingsPage
             tier={tier}
             useGroups={useGroups}
@@ -558,8 +560,6 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
             onAddGroup={handleAddGroup}
             onRemoveGroup={handleRemoveGroup}
           />
-        ) : activePage === "tariffs" ? (
-          <TariffsPage tier={tier} />
         ) : (
           <div className="space-y-6">
             {lock && (
@@ -567,11 +567,11 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
                 tone="warning"
                 icon={<Lock className="h-4 w-4" />}
                 action={
-                  // Заглушка системы оплаты: кнопка пока ведёт на страницу тарифов,
-                  // где сообщается, что тариф назначается вручную.
+                  // Заглушка системы оплаты: кнопка пока ведёт на главную страницу,
+                  // где размещено описание тарифов.
                   <button
                     type="button"
-                    onClick={() => setActivePage("tariffs")}
+                    onClick={() => setActivePage("home")}
                     className="shrink-0 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/30 transition-all hover:opacity-90 active:scale-95"
                   >
                     Оплатить подписку
