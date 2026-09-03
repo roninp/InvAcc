@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { MoexPriceService, TBankProxyPriceService, type PriceResult } from "@/lib/price-service"
+import { MoexDerivativeService, buildDerivativeSectorMessage } from "@/lib/derivative-service"
 import { AssetValidator } from "@/lib/validator"
 import { PortfolioStorage, normalizeAssets } from "@/lib/storage"
 import {
@@ -96,6 +97,63 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   const [activePortfolioId, setActivePortfolioId] = useState(1)
   const [portfolioLockInfo, setPortfolioLockInfo] = useState<{ parked: number } | null>(null)
 
+  // Тикеры инструментов срочного рынка Мосбиржи (фьючерсы/опционы) — такие активы
+  // нельзя использовать в расчёте. Флаг НЕ персистится: пересчитывается при вводе
+  // тикера, восстановлении, импорте и переключении портфеля.
+  const [derivativeTickers, setDerivativeTickers] = useState<Set<string>>(() => new Set())
+  // Информационное сообщение про фондовый сектор (показывается при блокировке).
+  const [sectorNotice, setSectorNotice] = useState<string | null>(null)
+  // Пул таймеров проверки тикеров (по id актива) — debounce набора текста.
+  const sectorCheckTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+  // Последний запрошенный тикер по id актива: защита от «мёртвых» флагов,
+  // когда медленный ответ по старому тикеру приходит после смены тикера.
+  const latestSectorTickerRef = useRef<Map<number, string>>(new Map())
+
+  /** Отменить все отложенные проверки тикеров (переключение/восстановление портфеля). */
+  const clearSectorCheckTimers = useCallback(() => {
+    sectorCheckTimersRef.current.forEach((timer) => clearTimeout(timer))
+    sectorCheckTimersRef.current = new Map()
+    latestSectorTickerRef.current = new Map()
+  }, [])
+
+  /** Проверить тикер актива на «срочность» с debounce 600 мс (набор текста). */
+  const scheduleSectorCheck = useCallback((assetId: number, tickerValue: string) => {
+    const ticker = tickerValue.trim().toUpperCase()
+    const prevTimer = sectorCheckTimersRef.current.get(assetId)
+    if (prevTimer) clearTimeout(prevTimer)
+    latestSectorTickerRef.current.delete(assetId)
+    if (!ticker) return
+    latestSectorTickerRef.current.set(assetId, ticker)
+    sectorCheckTimersRef.current.set(
+      assetId,
+      setTimeout(() => {
+        sectorCheckTimersRef.current.delete(assetId)
+        void MoexDerivativeService.isDerivativeTicker(ticker).then((isDerivative) => {
+          // Результат актуален, только если тикер не изменился с момента запроса.
+          if (latestSectorTickerRef.current.get(assetId) !== ticker) return
+          setDerivativeTickers((prev) => {
+            const next = new Set(prev)
+            if (isDerivative) next.add(ticker)
+            else next.delete(ticker)
+            return next
+          })
+        })
+      }, 600),
+    )
+  }, [])
+
+  /** Полный пересчёт флагов для списка активов (восстановление/импорт/переключение). */
+  const scheduleSectorChecksForAssets = useCallback(
+    (assetsList: Asset[]) => {
+      clearSectorCheckTimers()
+      setDerivativeTickers(new Set())
+      for (const asset of assetsList) {
+        if (asset.ticker?.trim()) scheduleSectorCheck(asset.id, asset.ticker)
+      }
+    },
+    [clearSectorCheckTimers, scheduleSectorCheck],
+  )
+
   const maxAssets = useMemo(() => (tier === "free" ? MAX_ASSETS_FREE : MAX_ASSETS_PAID), [tier])
 
   // Восстановление данных из localStorage после монтирования. Не читаем window
@@ -107,17 +165,21 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     const activeId = meta.activePortfolioId
     const saved = PortfolioStorage.loadPortfolioData(activeId)
     if (saved) {
-      setAssets(normalizeAssets(saved.assets || []))
+      const normalized = normalizeAssets(saved.assets || [])
+      setAssets(normalized)
       setNextId(saved.nextId)
       setCashBalance(saved.cashBalance)
       setUseGroups(saved.useGroups)
       setGroups(saved.groups)
       setNextGroupId(saved.nextGroupId)
+      // Пересчитываем флаги срочных инструментов для восстановленного портфеля.
+      scheduleSectorChecksForAssets(normalized)
     }
     setPortfolios(meta.portfolios)
     setActivePortfolioId(activeId)
     // Гидратация завершена — guard соответствия тарифу может работать.
     setHydrated(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Синхронизация сессии с сервером: вход/выход/обновление пользователя
@@ -172,7 +234,8 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   /** Применить полный снимок портфеля (восстановление из резервной копии / импорт). */
   const applyPortfolioData = useCallback(
     (data: PortfolioData) => {
-      setAssets(normalizeAssets(data.assets))
+      const normalizedData = normalizeAssets(data.assets)
+      setAssets(normalizedData)
       setNextId(data.nextId)
       setCashBalance(data.cashBalance ?? 0)
       // Тариф из данных не применяется: он назначается вручную в БД либо равен 'free'.
@@ -183,12 +246,17 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
       setAppliedAdjustmentIds(new Set())
       resetCalculation()
       setError(null)
+      // Пересчитываем флаги срочных инструментов (импорт/переключение/восстановление).
+      scheduleSectorChecksForAssets(normalizedData)
     },
-    [resetCalculation],
+    [resetCalculation, scheduleSectorChecksForAssets],
   )
 
   /** Сбросить рабочий стол к пустому состоянию (без очистки localStorage). */
   const resetWorkspace = useCallback(() => {
+    clearSectorCheckTimers()
+    setDerivativeTickers(new Set())
+    setSectorNotice(null)
     setAssets([])
     setNextId(1)
     setCashBalance(0)
@@ -203,7 +271,7 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     setEmptyTargetIds(new Set())
     setAppliedAdjustmentIds(new Set())
     setError(null)
-  }, [resetCalculation])
+  }, [clearSectorCheckTimers, resetCalculation])
 
   // Контроль соответствия портфеля тарифу. Начинает работать после гидратации
   // из localStorage (hydrated), чтобы не «парковать» пустой рабочий стол.
@@ -338,6 +406,9 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   useEffect(
     () => () => {
       if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current)
+      sectorCheckTimersRef.current.forEach((timer) => clearTimeout(timer))
+      sectorCheckTimersRef.current = new Map()
+      latestSectorTickerRef.current = new Map()
     },
     [],
   )
@@ -350,6 +421,10 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     }
   }, [tier, priceRefreshCooldown])
 
+  useEffect(() => {
+    if (derivativeTickers.size === 0) setSectorNotice(null)
+  }, [derivativeTickers])
+
   const handleUpdateAsset = useCallback(
     (updatedAsset: Asset) => {
       const validation = AssetValidator.validate(updatedAsset, useGroups)
@@ -357,15 +432,29 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
         setError(validation.errors[0])
         return
       }
+      const oldAsset = assets.find((a) => a.id === updatedAsset.id)
+      if (oldAsset && oldAsset.ticker !== updatedAsset.ticker) {
+        // Тикер изменился: снимаем старый флаг срочного рынка и проверяем новый
+        // с debounce (600 мс), пока пользователь допечатывает.
+        const oldTicker = oldAsset.ticker.trim().toUpperCase()
+        const newTicker = updatedAsset.ticker.trim().toUpperCase()
+        setDerivativeTickers((prev) => {
+          const next = new Set(prev)
+          if (oldTicker) next.delete(oldTicker)
+          if (newTicker) next.delete(newTicker)
+          return next
+        })
+        scheduleSectorCheck(updatedAsset.id, updatedAsset.ticker)
+      }
       setAssets((prevAssets) => {
-        const oldAsset = prevAssets.find((a) => a.id === updatedAsset.id)
         const updated = prevAssets.map((a) => (a.id === updatedAsset.id ? updatedAsset : a))
+        const prevAsset = prevAssets.find((a) => a.id === updatedAsset.id)
         if (
-          oldAsset &&
-          (oldAsset.ticker !== updatedAsset.ticker ||
-            oldAsset.targetPercent !== updatedAsset.targetPercent ||
-            oldAsset.groupId !== updatedAsset.groupId ||
-            oldAsset.lotSize !== updatedAsset.lotSize)
+          prevAsset &&
+          (prevAsset.ticker !== updatedAsset.ticker ||
+            prevAsset.targetPercent !== updatedAsset.targetPercent ||
+            prevAsset.groupId !== updatedAsset.groupId ||
+            prevAsset.lotSize !== updatedAsset.lotSize)
         ) {
           setTimeout(() => resetCalculation(), 0)
         }
@@ -373,7 +462,7 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
       })
       setError(null)
     },
-    [resetCalculation, useGroups],
+    [assets, resetCalculation, scheduleSectorCheck, useGroups],
   )
 
   const handleAddAsset = useCallback(() => {
@@ -389,16 +478,27 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
   const handleRemoveAsset = useCallback(
     (id: number) => {
       if (assets.length <= 1) return
+      const removed = assets.find((a) => a.id === id)
+      if (removed?.ticker.trim()) {
+        const ticker = removed.ticker.trim().toUpperCase()
+        setDerivativeTickers((prev) => {
+          const next = new Set(prev)
+          next.delete(ticker)
+          return next
+        })
+      }
+      latestSectorTickerRef.current.delete(id)
       setAssets((prevAssets) => prevAssets.filter((a) => a.id !== id))
       resetCalculation()
     },
-    [assets.length, resetCalculation],
+    [assets, resetCalculation],
   )
 
   const handleRefreshPrices = useCallback(async () => {
     setLoading(true)
     setError(null)
     setNotice(null)
+    setSectorNotice(null)
     try {
       const tickers = assets.map((a) => a.ticker).filter((t) => t)
       if (tickers.length === 0) {
@@ -426,17 +526,28 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
         fetched = await MoexPriceService.fetchPrices(tickers)
       }
       const { prices, lotSizes, errors } = fetched
+      // Инструменты срочного рынка (фьючерсы/опционы) исключаются из расчёта:
+      // цену и лот для них не применяем, ошибки загрузки не показываем.
+      const blockedSet = new Set([...derivativeTickers].map((t) => t.toUpperCase()))
       setAssets((prevAssets) =>
-        prevAssets.map((asset, index) => ({
-          ...asset,
-          price: prices[index] !== null && prices[index] !== undefined ? (prices[index] as number) : asset.price,
-          lotSize: lotSizes[index] != null && (lotSizes[index] as number) >= 1 ? (lotSizes[index] as number) : asset.lotSize || 1,
-        })),
+        prevAssets.map((asset, index) => {
+          if (blockedSet.has(asset.ticker.trim().toUpperCase())) return asset
+          return {
+            ...asset,
+            price: prices[index] !== null && prices[index] !== undefined ? (prices[index] as number) : asset.price,
+            lotSize: lotSizes[index] != null && (lotSizes[index] as number) >= 1 ? (lotSizes[index] as number) : asset.lotSize || 1,
+          }
+        }),
       )
+      const visibleErrors = errors.filter((entry) => !blockedSet.has(entry.split(":")[0]!.trim().toUpperCase()))
+      const derivativeBlocked = tickers
+        .map((t) => t.trim().toUpperCase())
+        .filter((t) => blockedSet.has(t))
+      setSectorNotice(derivativeBlocked.length > 0 ? buildDerivativeSectorMessage(derivativeBlocked) : null)
       if (usedFallback) {
         setNotice("Актуальные цены недоступны, данные обновляются с задержкой 15 минут")
-      } else if (errors.length > 0) {
-        setError(`Не удалось загрузить: ${errors.join("; ")}`)
+      } else if (visibleErrors.length > 0) {
+        setError(`Не удалось загрузить: ${visibleErrors.join("; ")}`)
       }
       resetCalculation()
       startPriceRefreshCooldown()
@@ -445,7 +556,7 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
     } finally {
       setLoading(false)
     }
-  }, [assets, resetCalculation, tier, startPriceRefreshCooldown])
+  }, [assets, derivativeTickers, resetCalculation, tier, startPriceRefreshCooldown])
 
   const handleCashBalanceChange = useCallback((value: number) => {
     setCashBalance(PortfolioCalculator.floorMoney(value))
@@ -809,6 +920,11 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
 
             {error && <Banner tone="negative" icon={<AlertTriangle className="h-4 w-4" />}>{error}</Banner>}
             {notice && <Banner tone="warning" icon={<Clock className="h-4 w-4" />}>{notice}</Banner>}
+            {sectorNotice && (
+              <Banner tone="info" icon={<Info className="h-4 w-4" strokeWidth={2} />}>
+                {sectorNotice}
+              </Banner>
+            )}
 
             {useGroups && groups.length > 0 && <GroupAllocations groups={groups} assets={assets} />}
 
@@ -823,6 +939,7 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
                   animationKey={animationKey}
                   isCalculated={isCalculated}
                   appliedAdjustmentIds={appliedAdjustmentIds}
+                  derivativeTickers={derivativeTickers}
                   onUpdate={handleUpdateAsset}
                   onRemove={handleRemoveAsset}
                   onDistributeEvenly={handleDistributeEvenly}
@@ -850,8 +967,9 @@ export function PortfolioRebalancer({ initialUser, initialTier }: RebalancerServ
                   <Wallet className="h-7 w-7" strokeWidth={1.75} />
                 </span>
                 <h3 className="text-base font-semibold text-foreground">Портфель пуст</h3>
-                <p className="mt-1 max-w-xs text-sm text-muted-foreground text-pretty">
-                  Добавьте активы Московской биржи, чтобы рассчитать ребалансировку.
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground text-pretty">
+                  Добавьте активы Московской биржи, чтобы рассчитать ребалансировку. Поддерживается только
+                  фондовый сектор — акции, облигации и ETF; фьючерсы и опционы не участвуют в расчёте.
                 </p>
                 <button
                   onClick={handleAddAsset}

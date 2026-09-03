@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowDownToLine, Scale, Trash2 } from "lucide-react"
+import { ArrowDownToLine, Info, Scale, Trash2 } from "lucide-react"
 import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { formatNumber, formatRub } from "@/lib/format"
 import { getGroupColor, type Asset, type AssetAnalysis, type Group } from "@/lib/types"
@@ -20,6 +20,8 @@ interface AssetRowProps {
   animate: boolean
   animateDelay: number
   isAdjustmentActive: boolean
+  /** Актив относится к срочному рынку Мосбиржи (фьючерс/опцион) — использовать нельзя. */
+  isDerivative: boolean
   useGroups: boolean
   groups: Group[]
 }
@@ -41,6 +43,7 @@ export function AssetRow({
   animate,
   animateDelay,
   isAdjustmentActive,
+  isDerivative,
   useGroups,
   groups,
 }: AssetRowProps) {
@@ -69,29 +72,42 @@ export function AssetRow({
   return (
     <tr
       className={`border-b border-border/70 transition-colors hover:bg-muted/40 ${
-        animate ? "animate-fade-in-up" : ""
-      }`}
+        isDerivative ? "bg-negative-muted/40 hover:bg-negative-muted/60" : ""
+      } ${animate ? "animate-fade-in-up" : ""}`}
       style={animate ? { animationDelay: `${Math.min(animateDelay, 9) * 0.04}s` } : undefined}
     >
       {/* Актив */}
       <td className="px-3 py-3 align-middle">
-        <div className="flex items-center gap-2">
-          {useGroups && (
-            <span
-              className="h-8 w-1 shrink-0 rounded-full"
-              style={{ backgroundColor: groupColorHex || "var(--muted-foreground)" }}
-              aria-hidden
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            {useGroups && (
+              <span
+                className="h-8 w-1 shrink-0 rounded-full"
+                style={{ backgroundColor: groupColorHex || "var(--muted-foreground)" }}
+                aria-hidden
+              />
+            )}
+            <input
+              type="text"
+              value={asset.ticker}
+              onChange={(e) => onUpdate({ ...asset, ticker: e.target.value.toUpperCase() })}
+              className={`w-28 font-mono font-medium tracking-wide ${inputBase} ${
+                isDerivative ? "border-negative/50 focus:ring-negative/30" : ""
+              }`}
+              maxLength={12}
+              placeholder="ТИКЕР/ISIN"
+              aria-label="Тикер актива"
             />
+          </div>
+          {isDerivative && (
+            <span
+              className="inline-flex w-fit items-center gap-1 rounded-md border border-negative/25 bg-negative-muted px-1.5 py-0.5 text-[11px] font-medium leading-none text-negative"
+              title="Фьючерсы и опционы не поддерживаются — расчёт только для фондового сектора Мосбиржи"
+            >
+              <Info className="h-3 w-3" strokeWidth={2} />
+              Срочный рынок
+            </span>
           )}
-          <input
-            type="text"
-            value={asset.ticker}
-            onChange={(e) => onUpdate({ ...asset, ticker: e.target.value.toUpperCase() })}
-            className={`w-28 font-mono font-medium tracking-wide ${inputBase}`}
-            maxLength={12}
-            placeholder="ТИКЕР/ISIN"
-            aria-label="Тикер актива"
-          />
         </div>
       </td>
 

@@ -13,6 +13,8 @@ interface AssetTableProps {
   animationKey: number
   isCalculated: boolean
   appliedAdjustmentIds: Set<number>
+  /** Тикеры инструментов срочного рынка Мосбиржи — они подсвечиваются и не участвуют в расчёте. */
+  derivativeTickers: ReadonlySet<string>
   onUpdate: (asset: Asset) => void
   onRemove: (id: number) => void
   onDistributeEvenly: () => void
@@ -33,6 +35,7 @@ export function AssetTable({
   animationKey,
   isCalculated,
   appliedAdjustmentIds,
+  derivativeTickers,
   onUpdate,
   onRemove,
   onDistributeEvenly,
@@ -93,6 +96,7 @@ export function AssetTable({
                 animate={isCalculated}
                 animateDelay={index}
                 isAdjustmentActive={appliedAdjustmentIds.has(asset.id)}
+                isDerivative={derivativeTickers.has(asset.ticker.trim().toUpperCase())}
                 useGroups={useGroups}
                 groups={groups}
               />
