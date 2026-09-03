@@ -124,7 +124,7 @@ export class TBankProxyPriceService {
     const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
     if (!response.ok) {
       const text = await response.text().catch(() => "")
-      throw new Error(`Прокси Finam ответил ${response.status}: ${text}`)
+      throw new Error(`Прокси котировок ответил ${response.status}: ${text}`)
     }
     const data = await response.json()
     return {

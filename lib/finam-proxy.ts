@@ -121,7 +121,7 @@ class HttpError extends Error {
   body: string
 
   constructor(status: number, body = "") {
-    super(`Finam API HTTP ${status}`)
+    super(`Источник цен ответил HTTP ${status}`)
     this.name = "HttpError"
     this.status = status
     this.body = body
@@ -136,7 +136,7 @@ async function getAccessToken(): Promise<string> {
   }
   const secret = getSecret()
   if (!secret) {
-    throw new Error("FINAM_API_SECRET не задан — укажите его в файле .env.local (см. .env.example)")
+    throw new Error("Источник мгновенных котировок не настроен на сервере")
   }
 
   const response = await fetch(`${FINAM_API_BASE}/v1/sessions`, {
@@ -152,7 +152,7 @@ async function getAccessToken(): Promise<string> {
 
   const data = (await response.json().catch(() => null)) as FinamSessionResponse | null
   if (!data || typeof data.token !== "string" || !data.token) {
-    throw new Error("Finam API вернул пустой JWT-токен")
+    throw new Error("Источник цен вернул невалидный токен доступа")
   }
 
   accessToken = data.token
@@ -347,7 +347,7 @@ async function resolveSymbol(input: string): Promise<string> {
   if (isIsin(value)) {
     await ensureCatalog()
     const symbol = catalogByIsin?.get(value)
-    if (!symbol) throw new Error(`ISIN "${value}" не найден на Мосбирже (Finam)`)
+    if (!symbol) throw new Error(`ISIN "${value}" не найден на Мосбирже`)
     return symbol
   }
 
@@ -383,7 +383,7 @@ async function fetchTickerData(value: string): Promise<{ price: number | null; l
     lotSize = results[1]
   } catch (err) {
     if (err instanceof HttpError && (err.status === 400 || err.status === 404)) {
-      throw new Error(`Актив "${value}" не найден на Мосбирже (Finam)`)
+      throw new Error(`Актив "${value}" не найден на Мосбирже`)
     }
     throw err
   }
@@ -403,7 +403,7 @@ function friendlyError(err: unknown): string {
     return "Источник цен в реальном времени недоступен"
   }
   if (status === 429) {
-    return "Превышен лимит запросов Finam API (200/мин). Подождите минуту"
+    return "Превышен лимит запросов. Подождите минуту и повторите"
   }
   if (/fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|UNAVAILABLE|UND_ERR/i.test(message)) {
     return "Источник цен в реальном времени недоступен"
