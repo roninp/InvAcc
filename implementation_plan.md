@@ -1,80 +1,41 @@
 # Implementation Plan
 
 ## Overview
-Добавить проверку инструментов на принадлежность к **срочному отделу Московской биржи** (движок `futures`: фьючерсы, опционы и прочие производные): такие активы **нельзя использовать** — они подсвечиваются и блокируются сразу при вводе тикера, исключаются из загрузки цен, а на экране показывается информационное сообщение, что система производит расчёт **только для фондового сектора Московской биржи**.
+Увеличить весь интерфейс сайта на 10 % — ровно так, как он изменяется при увеличении масштаба браузера (Ctrl+): тексты, отступы, размеры блоков, иконки, границы и пиксельные детали. Плюс растянуть текстовый hero-блок главной страницы на всю ширину контейнера.
 
-**Контекст и подход.** Активы идентифицируются по `ticker` (`Asset` в `lib/types.ts`), единственная точка сетевого взаимодействия — `handleRefreshPrices` в `components/portfolio-rebalancer.tsx`; флаг производного инструмента никогда не персистится — пересчитывается по требованию. Детекция использует MOEX ISS: `GET /iss/engines/futures/markets/{forts|options}/securities/{TICKER}.json` возвращает **HTTP 200 даже для несуществующего secid, но с пустым `securities.data`** (проверено вживую: `SiZ6` → непустой `data` с `BOARDID=RFUD`, `ZZZZZZZZZ` → пустой). Поэтому критерий «срочный инструмент» = `securities.data.length > 0`, НЕ HTTP-статус. Кэш результатов на сессию (сектор тикера не меняется). UI-слой остаётся «глухим»: решает, как показать, а классификацию выполняет сервис слоя логики (`lib/derivative-service.ts`), блокировка реализуется «не применять цену и не показывать ошибку загрузки для заблокированных тикеров».
+**Подход:** одна строка CSS — `html { zoom: 110% }` в `app/globals.css`. Это нативный способ масштабирования всей страницы: в отличие от `font-size: 110%` (увеличивает только rem/em-величины), `zoom` увеличивает всё без исключения, включая `text-[15px]`, `text-[11px]`, border 1px и `min-w-[860px]` — точная имитация Ctrl+ в браузере. Tailwind-классы, типы и логика компонентов не затрагиваются. Побочное следствие (нормальное для Ctrl+): на окнах ~1400px появляется горизонтальная прокрутка, т.к. контейнер `max-w-7xl` (1280px) становится 1408px.
 
 ## Types
-Изменений в `lib/types.ts` **нет** (флаг не персистится, `Asset` не расширяется). В `lib/derivative-service.ts` появляются:
-- константа `DERIVATIVE_SECTOR_STATEMENT = "Система производит расчёт только для фондового сектора Московской биржи"` — единый текст для сообщений;
-- модульный кэш `const derivativeCache = new Map<string, boolean>()` (ключ — тикер в верхнем регистре);
-- сигнатура детектора: `isDerivativeTicker(ticker: string): Promise<boolean>` и `filterDerivativeTickers(tickers: string[]): Promise<string[]>` (возвращает ВЕРХНИЙ регистр; нормализует сама);
-- чистая функция `parseHasRows(data: unknown): boolean` — `data.securities.data` — непустой массив;
-- чистая функция `buildDerivativeSectorMessage(tickers: string[]): string`.
+Изменений нет. Сигнатуры компонентов и типы данных не затрагиваются.
 
 ## Files
-
-**Новые:**
-- **`lib/derivative-service.ts`** — слой логики (без UI): `MoexDerivativeService` + `buildDerivativeSectorMessage` + приватный кэш.
-- **`lib/__tests__/derivative-service.test.ts`** — unit-тесты (чистые функции + `isDerivativeTicker` с `vi.stubGlobal("fetch")`).
-
 **Изменяемые:**
 
 | Файл | Изменения |
 |---|---|
-| `components/portfolio-rebalancer.tsx` | Стейт `derivativeTickers: Set<string>`, `sectorNotice: string \| null`; ref `sectorCheckTimersRef` (debounce по `asset.id`); хелперы `scheduleSectorCheck`/`scheduleSectorChecksForAssets`; вызовы в `handleUpdateAsset` (изменение тикера → debounce 600 мс), в `applyPortfolioData` и в hydration-эффекте; `handleRefreshPrices` — не применять цену/лот и скрывать ошибки для заблокированных тикеров, ставить `sectorNotice`; рендер инфо-баннера; текст пустого состояния. |
-| `components/asset-table.tsx` | Новый проп `derivativeTickers: ReadonlySet<string>`; для каждой строки `isDerivative={derivativeTickers.has(asset.ticker.trim().toUpperCase())}`. |
-| `components/asset-row.tsx` | Новый проп `isDerivative: boolean`; подсветка строки (`bg-negative-muted/40`) и бейдж «Срочный рынок» с иконкой и `title`. |
-| `README.md` | Раздел «Фондовый сектор vs срочный рынок»; строка о новом тесте в списке файлов тестов. |
+| `d:\ClaudeProjects\InvAcc\app\globals.css` | В блок `@layer base` добавлено правило `html { zoom: 110%; }`. |
+| `d:\ClaudeProjects\InvAcc\components\home-page.tsx` | Строка 81: `<div className="relative max-w-2xl space-y-6">` → `<div className="relative space-y-6">` — hero-блок занимает всю доступную ширину карточки. |
 
-**На удаление:** нет.
+**Новые / на удаление:** нет.
 
 ## Functions
-
-**Новые (чистая логика, `lib/derivative-service.ts`):**
-- `buildDerivativeSectorMessage(tickers: string[]): string` — ед./мн. число: `Актив «SiZ6» относится к срочному рынку Московской биржи (фьючерсы, опционы). Система производит расчёт только для фондового сектора Московской биржи — инструмент исключён из расчёта.` / аналогично во мн. числе.
-- `parseHasRows(data: unknown): boolean` — критерий «инструмент существует на этой площадке» (квир ISS: 200, но пустой `data`).
-- `MoexDerivativeService.buildSecurityUrl(ticker, market): string`.
-- `MoexDerivativeService.checkTickerRaw(ticker): Promise<boolean>` — без кэша: последовательный обход `DERIVATIVE_MARKETS = ["forts", "options"]`, `AbortSignal.timeout(5000)`, сетевые сбои → `false`.
-- `MoexDerivativeService.isDerivativeTicker(ticker): Promise<boolean>` — нормализация, кэш.
-- `MoexDerivativeService.filterDerivativeTickers(tickers): Promise<string[]>` — дедупликация, `Promise.all`, никогда не бросает.
-- `MoexDerivativeService.clearCache(): void` — для тестов.
-
-**Новые (компонент `portfolio-rebalancer.tsx`):**
-- `scheduleSectorCheck(assetId: number, ticker: string)` — отмена старого таймера для `assetId`, debounce 600 мс → `isDerivativeTicker` → атомарное обновление `derivativeTickers`.
-- `scheduleSectorChecksForAssets(assetsList: Asset[])` — сброс таймеров и флагов, запуск проверок по списку.
-
-**Изменённые:**
-- `handleUpdateAsset` — при смене `ticker` снять флаг старого тикера и вызвать `scheduleSectorCheck`;
-- `applyPortfolioData` и hydration `useEffect` — вызов `scheduleSectorChecksForAssets`;
-- `handleRemoveAsset` — снять флаг удалённого тикера;
-- `handleRefreshPrices` — не применять цену/лот и скрывать ошибки для заблокированных тикеров; `setSectorNotice(...)`;
-- рендер — инфо-баннер рядом с `notice`; эффект снятия баннера при пустом `derivativeTickers`.
+Изменений нет — правки только в CSS и разметке (один class-атрибут `home-page.tsx`). Логика компонентов не затрагивается.
 
 ## Classes
-Новый класс: **`MoexDerivativeService`** (только static-методы, паттерн `MoexPriceService`). Существующие классы не модифицируются.
+Без изменений. Все пользовательские правила (`@layer base`) и компоненты масштабируются через `html { zoom }`.
 
 ## Dependencies
-Новых npm-пакетов не требуется. Иконки `Info`/`AlertTriangle` уже импортируются в `portfolio-rebalancer.tsx`; в `asset-row.tsx` добавится импорт `Info` из установленной `lucide-react`. Всё остальное — нативный `fetch` в браузере.
+Новых зависимостей нет. `zoom` — нативное CSS-свойство (Baseline 2024), поддерживается всеми современными браузерами (Chrome, Edge, Safari, Firefox 126+) без префиксов.
 
 ## Testing
+Unit-тесты не требуются — изменения только в CSS/разметке.
 
-**`lib/__tests__/derivative-service.test.ts`** (мок `fetch` через `vi.stubGlobal`, сброс `clearCache()`):
-- `parseHasRows`: пустой `securities.data` → `false`; непустой → `true`;
-- `buildSecurityUrl`: корректный URL и кодирование опционных secid с пробелом;
-- `buildDerivativeSectorMessage`: единственное/множественное число, дедупликация;
-- `isDerivativeTicker`: фьючерс → `true`; опцион → `true`; неизвестный secid (200 с пустым `data`) → `false`; сетевая ошибка → `false`;
-- кэш: повторный вызов не делает лишний `fetch`.
-
-**Существующие тесты:** не меняются.
-
-**Валидация:** `pnpm test`; `npx tsc --noEmit` (в `next.config.ts` стоит `typescript.ignoreBuildErrors: true`, поэтому `pnpm build` типы не проверяет); `pnpm build`; ручные сценарии.
+**Валидация:**
+1. `npx tsc --noEmit` — проверка JSX после правки `home-page.tsx`.
+2. `pnpm build` — производственная сборка.
+3. Ручная проверка в `pnpm dev`: приложение при масштабе 100% выглядит так же, как раньше при Ctrl+110%; hero на главной растянут на всю ширину; вкладки «Главная»/«Портфель»/«Настройки» и страницы `/login`, `/register` без артефактов рендеринга (sticky-шапка, cookie-баннер, таблица портфеля, анимации).
 
 ## Implementation Order
-1. `lib/derivative-service.ts` — новый сервис и чистые функции.
-2. `lib/__tests__/derivative-service.test.ts` — тесты; прогнать.
-3. `components/asset-row.tsx` (+`isDerivative`) и `components/asset-table.tsx` (+`derivativeTickers`).
-4. `components/portfolio-rebalancer.tsx` — стейт/ref, `scheduleSectorCheck`, интеграция, инфо-баннер, текст пустого состояния.
-5. `README.md` — документация.
-6. `pnpm test` → `npx tsc --noEmit` → `pnpm build` → ручные сценарии.
+1. `app/globals.css` — добавить `html { zoom: 110%; }` в `@layer base`. (выполнено)
+2. `components/home-page.tsx` — удалить `max-w-2xl` у hero-контейнера. (выполнено)
+3. `npx tsc --noEmit` → `pnpm build` → ручная визуальная проверка.

@@ -78,7 +78,7 @@ export function HomePage({ tier, onNavigate }: { tier: Tier; onNavigate: (page: 
           aria-hidden
           className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
         />
-        <div className="relative max-w-2xl space-y-6">
+        <div className="relative space-y-6">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 text-primary" strokeWidth={2.25} />
             Бесплатный старт для частных инвесторов
