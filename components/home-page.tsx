@@ -81,15 +81,13 @@ export function HomePage({ tier, onNavigate }: { tier: Tier; onNavigate: (page: 
         <div className="relative space-y-6">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 text-primary" strokeWidth={2.25} />
-            Бесплатный старт для частных инвесторов
+            Быстрый и удобный расчет инвестиций под ваши цели
           </span>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
             Ребалансировка и учёт инвестиций
           </h2>
           <p className="text-sm text-muted-foreground text-pretty sm:text-base">
-            Инструмент для частных инвесторов Московской биржи: задайте целевые доли портфеля — и получайте точные
-            расчёты, что и когда докупить или продать. Цены подтягиваются автоматически, свободные деньги учитываются,
-            а результат сохраняется прямо в браузере.
+            Сервис предназначен для инвесторов Московской биржи: просто внесите активы вашего портфеля, укажите их целевые доли — и получайте точные расчёты, что из них докупить или продать чтобы привести портфель к нужному вам состоянию. Цены подтягиваются автоматически, свободные деньги учитываются, а результат сохраняется прямо в браузере.
           </p>
 
           <div className="grid gap-5">
