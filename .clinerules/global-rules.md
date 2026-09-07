@@ -1,4 +1,4 @@
-# Clean Architecture & Strict Typing Rules
+# Clean Architecture, Strict Typing & Execution Rules
 
 ## 1. General Instructions & Role
 - Ты выступаешь в роли ведущего системного архитектора и старшего разработчика.
@@ -37,7 +37,11 @@ If any MCP (Model Context Protocol) servers are active and connected (Supabase, 
 - **DATABASE SYNCHRONIZATION (Supabase / Postgres MCP):** Before writing, creating, or changing any database schemas, tables, RLS policies, or migrations, use the Supabase MCP tools to inspect the live state of the database.
 - **RUNTIME DEBUGGING & TESTING (Chrome DevTools MCP):** When a frontend error occurs, DO NOT blind-guess the solution. Execute DevTools MCP to read exact console error logs and network responses.
 
-## 5. Workflow & Scope Boundaries
+## 5. Workflow & Execution Safety (CRITICAL TO PREVENT JSON ERRORS)
+- **File Management vs Terminal:** NEVER use terminal commands (like `echo`, `cat`, `sed`, `awk`, or `printf`) to create, append, or modify files. This breaks the internal JSON RPC layer of the VS Code extension. ALWAYS use specific file tools (`write_to_file`, `replace_in_file`) for any file modifications.
+- **Command Complexity:** Do not chain complex bash commands with `&&` or multiple lines if they contain nested quotes, backslashes (`\`), or complex regular expressions. Break them into separate, simple tool calls.
+- **Context & Log Management:** Avoid running terminal commands that produce massive stdout/stderr output (e.g., thousands of lines of logs). If a command is verbose, pipe its output to a temporary log file (e.g., `command > build.log`) and read it with file tools if needed. Use silent or quiet flags for package managers and test runners (e.g., `npm test -- --silent`, `pip install -q`).
+- **Error Recovery Loop:** If any tool execution fails with a "JSON parsing error", "invalid JSON arguments", or "Invalid input" error, DO NOT retry the exact same format, flags, or payload. You must immediately pivot to an alternative tool or simplify the command parameters to the bare minimum. If you get stuck in an error loop for more than 2 iterations, explicitly stop and ask the user for a context reset.
 - Apply strict typing and architecture rules ONLY to the new code being created or the existing code directly affected by the current task. Do not try to refactor the whole project unless explicitly asked.
 - Before marking a task as done, you may run type-checking commands (like `npx tsc --noEmit`), but DO NOT get stuck in an infinite loop if third-party libraries have typing errors.
 
@@ -53,4 +57,4 @@ If any MCP (Model Context Protocol) servers are active and connected (Supabase, 
 1. **Архитектура:** Опиши структуру папок создаваемого модуля и схему связей (как логика взаимодействует с UI).
 2. **Ядро (Бизнес-логика):** Напиши чистый код контрактов, моделей данных, сервисов, контроллеров или стейта.
 3. **Интерфейс (UI):** Напиши код компонентов визуализации, принимающих данные из Ядра.
-4. **Инструкция по масштабированию:** Дай пошаговый алгоритм, как разработчику добавить в этот модуль новое поле или фичу, не ломая текущую архитектуру.
+4. **Инструкция по масштабированию:** Дай пошаговый алгоритм, как разработчению добавить в этот модуль новое поле или фичу, не ломая текущую архитектуру.
