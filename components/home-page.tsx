@@ -1,7 +1,10 @@
 "use client"
 
-import { ArrowRight, Check, LineChart, PiggyBank, RefreshCw, ShieldCheck, Sparkles, Users } from "lucide-react"
+import { ArrowRight, Check, LineChart, PiggyBank, RefreshCw, ShieldCheck, Users } from "lucide-react"
 import type { Page, Tier } from "@/lib/types"
+
+/** Порядок тарифов по возрастанию стоимости (для плашки «Перейти»). */
+const TIER_ORDER: Tier[] = ["free", "basic", "pro"]
 
 const PLANS: {
   id: Tier
@@ -10,7 +13,6 @@ const PLANS: {
   period: string
   description: string
   features: string[]
-  highlight?: boolean
 }[] = [
   {
     id: "free",
@@ -18,35 +20,38 @@ const PLANS: {
     price: "0 ₽",
     period: "навсегда",
     description: "Для знакомства с ребалансировкой",
-    features: ["Один портфель", "До 2 активов в портфеле", "Цены Мосбиржи (задержка ~15 мин)", "Расчёт целевых долей", "Сохранение в файл"],
+    features: [
+      "Два актива в портфеле",
+      "Настройка целевых долей",
+      "Автоматическое определение цен",
+      "Расчёт существующих долей",
+      "Автоматическое сохранение и загрузка портфеля",
+      "Сохранение и загрузка портфеля из файла",
+    ],
   },
   {
     id: "basic",
     name: "Базовый",
-    price: "299 ₽",
+    price: "199 ₽",
     period: "в месяц",
-    description: "Для частного инвестора",
+    description: "Наиболее подходит для инвестиций в БПИФы",
     features: [
-      "Один портфель",
+      "Все возможности бесплатного тарифа",
       "До 100 активов в портфеле",
-      "Цены Мосбиржи (задержка ~15 мин)",
-      "Учёт свободных денег и бюджета",
-      "Экспорт и импорт портфеля",
     ],
-    highlight: true,
   },
   {
     id: "pro",
     name: "Про",
-    price: "899 ₽",
+    price: "399 ₽",
     period: "в месяц",
     description: "Для продвинутого управления",
     features: [
-      "Всё из тарифа «Базовый»",
-      "До 5 портфелей",
+      "Все возможности тарифа «Базовый»",
       "Группы активов по категориям",
+      "Расчёт долей групп и активов в группе",
       "Мгновенные котировки в реальном времени",
-      "Приоритетная поддержка",
+      "Учёт 5-ти разных портфелей",
     ],
   },
 ]
@@ -131,20 +136,16 @@ export function HomePage({ tier, onNavigate }: { tier: Tier; onNavigate: (page: 
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {PLANS.map((plan) => {
+            const currentTierIndex = TIER_ORDER.indexOf(tier)
+            const planTierIndex = TIER_ORDER.indexOf(plan.id)
+            // «Перейти» — заглушка: показываем только для тарифов дороже текущего.
+            const isUpgrade = currentTierIndex >= 0 && planTierIndex > currentTierIndex
             const isCurrent = tier === plan.id
             return (
               <div
                 key={plan.id}
-                className={`relative flex flex-col rounded-2xl border p-6 shadow-sm transition-all duration-300 hover:shadow-md ${
-                  plan.highlight ? "border-primary/40 bg-card ring-1 ring-primary/20" : "border-border bg-card"
-                }`}
+                className="relative flex flex-col rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-300 hover:shadow-md"
               >
-                {plan.highlight && (
-                  <span className="absolute -top-3 left-6 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
-                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
-                    Популярный
-                  </span>
-                )}
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-semibold text-foreground">{plan.name}</h3>
                   {isCurrent && (
@@ -170,17 +171,23 @@ export function HomePage({ tier, onNavigate }: { tier: Tier; onNavigate: (page: 
                   ))}
                 </ul>
 
-                <button
-                  disabled
-                  className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                    isCurrent
-                      ? "cursor-default border border-border bg-muted text-muted-foreground"
-                      : "cursor-default border border-border bg-muted/40 text-muted-foreground"
-                  }`}
-                  title="Тариф назначается вручную в базе данных"
-                >
-                  {isCurrent ? "Активен" : "Назначается вручную"}
-                </button>
+                {isCurrent ? (
+                  <button
+                    disabled
+                    className="mt-6 w-full cursor-default rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-medium text-muted-foreground"
+                  >
+                    Активен
+                  </button>
+                ) : isUpgrade ? (
+                  // Заглушка системы оплаты: кнопка появится вместе с подключением оплаты.
+                  <button
+                    disabled
+                    title="Система оплаты появится позже"
+                    className="mt-6 w-full cursor-not-allowed rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    Перейти
+                  </button>
+                ) : null}
               </div>
             )
           })}
