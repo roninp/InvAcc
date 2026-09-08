@@ -84,10 +84,14 @@ export function AssetTable({
               // Ищем анализ для конкретного актива
               const assetAnalysis = analysis.find((a) => a.id === asset.id)
               
-              // Безопасный fallback, если объект анализа отсутствует до расчетов
+              // Безопасный fallback с гарантированными дефолтными числовыми полями
+              // для предотвращения краша до выполнения расчетов
               const fallbackAnalysis = assetAnalysis ?? ({
                 id: asset.id,
-                action: "none"
+                currentPercent: 0,
+                requiredQuantity: 0,
+                adjustment: 0,
+                adjustmentValue: 0
               } as unknown as AssetAnalysis)
 
               return (

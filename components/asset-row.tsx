@@ -54,17 +54,20 @@ export function AssetRow({
     priceDecimals,
   )
 
+  // Безопасный расчет стилей с защитой от отсутствия данных в анализе
   const percentStyles = (() => {
     if (!analysis) return ""
-    if (analysis.currentPercent < asset.targetPercent) return "bg-negative-muted text-negative"
-    if (analysis.currentPercent > asset.targetPercent) return "bg-positive-muted text-positive"
+    const currentPercent = analysis.currentPercent ?? 0
+    if (currentPercent < asset.targetPercent) return "bg-negative-muted text-negative"
+    if (currentPercent > asset.targetPercent) return "bg-positive-muted text-positive"
     return "bg-info-muted text-info"
   })()
 
+  // Безопасный расчет цвета корректировок
   const adjustmentColor = analysis
-    ? analysis.adjustment > 0.1
+    ? (analysis.adjustment ?? 0) > 0.1
       ? "text-positive"
-      : analysis.adjustment < -0.1
+      : (analysis.adjustment ?? 0) < -0.1
         ? "text-negative"
         : "text-muted-foreground"
     : "text-muted-foreground"
@@ -195,7 +198,7 @@ export function AssetRow({
           <span
             className={`inline-block min-w-[3.5rem] rounded-full px-2.5 py-1 font-mono text-xs font-semibold tabular-nums ${percentStyles}`}
           >
-            {analysis.currentPercent.toFixed(1)}%
+            {((analysis.currentPercent) ?? 0).toFixed(1)}%
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -213,25 +216,30 @@ export function AssetRow({
           <div className="flex items-center justify-end gap-2">
             <div className="flex flex-col items-end leading-tight">
               <span className="tabular-nums">
-                {analysis.adjustment > 0 ? "+" : ""}
-                {formatNumber(Math.round(analysis.adjustment))}
+                {(analysis.adjustment ?? 0) > 0 ? "+" : ""}
+                {formatNumber(Math.round(analysis.adjustment ?? 0))}
               </span>
               <span className="text-[11px] tabular-nums opacity-80">
-                {analysis.adjustmentValue > 0 ? "+" : ""}
-                {analysis.adjustmentValue.toFixed(2)} ₽
+                {(analysis.adjustmentValue ?? 0) > 0 ? "+" : ""}
+                {(analysis.adjustmentValue ?? 0).toFixed(2)} ₽
               </span>
             </div>
             <button
               onClick={() => onApplyAdjustment(asset.id, analysis.requiredQuantity, analysis.adjustmentValue)}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-              title="Применить требуемое количество"
-              aria-label="Применить требуемое количество"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary transition-all hover:bg-primary hover:text-primary-foreground active:scale-95"
+              title="Применить корректировку для этого актива"
             >
               <ArrowDownToLine className="h-3.5 w-3.5" strokeWidth={2.25} />
             </button>
           </div>
+        ) : analysis ? (
+          <span className="tabular-nums">
+            {/* Замена action на математическую проверку знака requiredQuantity */}
+            {(analysis.requiredQuantity ?? 0) > 0.01 ? "+" : (analysis.requiredQuantity ?? 0) < -0.01 ? "-" : ""}
+            {formatNumber(Math.abs(Math.round(analysis.requiredQuantity ?? 0)))}
+          </span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          "—"
         )}
       </td>
 
@@ -240,11 +248,11 @@ export function AssetRow({
         <button
           onClick={() => onRemove(asset.id)}
           disabled={isLastAsset}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-negative-muted hover:text-negative disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-          title={isLastAsset ? "Минимум 1 актив" : "Удалить актив"}
-          aria-label="Удалить актив"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-negative-muted hover:text-negative disabled:cursor-not-allowed disabled:opacity-40"
+          title={isLastAsset ? "Нельзя удалить единственный актив" : "Удалить актив"}
+          aria-label="Удалить строку актива"
         >
-          <Trash2 className="h-4 w-4" strokeWidth={2} />
+          <Trash2 className="h-4 w-4" />
         </button>
       </td>
     </tr>
