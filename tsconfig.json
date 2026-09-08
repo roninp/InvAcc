@@ -20,7 +20,17 @@
     ],
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+
+    /* --- Дополнительные строгие правила под Clean Architecture --- */
+    "noImplicitAny": true,                       // Запрещает неявный тип any
+    "noImplicitReturns": true,                   // Ошибка, если функция возвращает значение не во всех ветках
+    "noImplicitThis": true,                      // Ошибка, если тип 'this' не определен явно
+    "noFallthroughCasesInSwitch": true,           // Запрещает забывать break в switch-case
+    "noUnusedLocals": true,                      // Ошибка, если переменная объявлена, но не используется
+    "noUnusedParameters": true,                  // Ошибка, если аргумент функции не используется
+    "noPropertyAccessFromIndexSignature": true,   // Требует обращаться к динамическим полям через obj['key']
+    "exactOptionalPropertyTypes": true           // Запрещает присваивать undefined опциональным свойствам через знак ?
   },
   "include": [
     "next-env.d.ts",

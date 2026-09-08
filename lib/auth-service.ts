@@ -40,10 +40,16 @@ export class AuthService {
       return { success: false, error: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов` }
     }
 
+    // Безопасно собираем объект опций, исключая явную передачу undefined
+    const signUpOptions: { emailRedirectTo?: string } = {}
+    if (input.emailRedirectTo) {
+      signUpOptions.emailRedirectTo = input.emailRedirectTo
+    }
+
     const { data, error } = await client.auth.signUp({
       email,
       password: input.password,
-      options: { emailRedirectTo: input.emailRedirectTo },
+      options: signUpOptions,
     })
 
     if (error) return { success: false, error: toFriendlyAuthError(error) }

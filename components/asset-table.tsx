@@ -80,27 +80,38 @@ export function AssetTable({
             </tr>
           </thead>
           <tbody key={animationKey}>
-            {assets.map((asset, index) => (
-              <AssetRow
-                key={asset.id}
-                asset={asset}
-                analysis={analysis.find((a) => a.id === asset.id)}
-                onUpdate={onUpdate}
-                onRemove={onRemove}
-                onDistributeEvenly={onDistributeEvenly}
-                onTargetEmptyChange={onTargetEmptyChange}
-                onQuantityChanged={onQuantityChanged}
-                onApplyAdjustment={onApplyAdjustment}
-                isLoading={loading}
-                isLastAsset={assets.length <= 1}
-                animate={isCalculated}
-                animateDelay={index}
-                isAdjustmentActive={appliedAdjustmentIds.has(asset.id)}
-                isDerivative={derivativeTickers.has(asset.ticker.trim().toUpperCase())}
-                useGroups={useGroups}
-                groups={groups}
-              />
-            ))}
+            {assets.map((asset, index) => {
+              // Ищем анализ для конкретного актива
+              const assetAnalysis = analysis.find((a) => a.id === asset.id)
+              
+              // Безопасный fallback, если объект анализа отсутствует до расчетов
+              const fallbackAnalysis = assetAnalysis ?? ({
+                id: asset.id,
+                action: "none"
+              } as unknown as AssetAnalysis)
+
+              return (
+                <AssetRow
+                  key={asset.id}
+                  asset={asset}
+                  analysis={fallbackAnalysis}
+                  onUpdate={onUpdate}
+                  onRemove={onRemove}
+                  onDistributeEvenly={onDistributeEvenly}
+                  onTargetEmptyChange={onTargetEmptyChange}
+                  onQuantityChanged={onQuantityChanged}
+                  onApplyAdjustment={onApplyAdjustment}
+                  isLoading={loading}
+                  isLastAsset={assets.length <= 1}
+                  animate={isCalculated}
+                  animateDelay={index}
+                  isAdjustmentActive={appliedAdjustmentIds.has(asset.id)}
+                  isDerivative={derivativeTickers.has(asset.ticker.trim().toUpperCase())}
+                  useGroups={useGroups}
+                  groups={groups}
+                />
+              )
+            })}
           </tbody>
         </table>
       </div>
