@@ -9,9 +9,11 @@ import {
   Download,
   Info,
   Loader2,
+  Lock,
   Plus,
   RefreshCw,
   RotateCcw,
+  Tag,
   Upload,
   Wallet,
 } from "lucide-react"
@@ -19,7 +21,8 @@ import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { MoexPriceService, TBankProxyPriceService, type PriceResult } from "@/lib/price-service"
 import { AssetValidator } from "@/lib/validator"
 import { PortfolioStorage, normalizeAssets } from "@/lib/storage"
-import { PRICE_REFRESH_COOLDOWN_SECONDS, type Asset, type AssetAnalysis, type Group, type Page, type Tier } from "@/lib/types"
+import { getRequiredTier, getTierLabel, tierCovers, TIER_MAX_ASSETS } from "@/lib/tariff"
+import { PRICE_REFRESH_COOLDOWN_SECONDS, type Asset, type AssetAnalysis, type Group, type Page, type PortfolioData, type Tier } from "@/lib/types"
 import { AppHeader } from "./app-header"
 import { PortfolioSummary } from "./portfolio-summary"
 import { GroupAllocations } from "./group-allocations"
@@ -59,8 +62,20 @@ export function PortfolioRebalancer() {
   const [useGroups, setUseGroups] = useState<boolean>(false)
   const [groups, setGroups] = useState<Group[]>([])
   const [nextGroupId, setNextGroupId] = useState<number>(1)
+  const [lockedSnapshot, setLockedSnapshot] = useState<PortfolioData | null>(null)
 
-  const maxAssets = useMemo(() => (tier === "free" ? 2 : 100), [tier])
+  const maxAssets = useMemo(() => TIER_MAX_ASSETS[tier], [tier])
+
+  // Портфель заблокирован (не соответствует текущему тарифу), ожидает оплаты.
+  const isLocked = lockedSnapshot != null
+  // Лучший тариф, которому соответствует сохранённый (заблокированный) портфель.
+  const lockedRequiredTier = useMemo(
+    () =>
+      lockedSnapshot
+        ? getRequiredTier(lockedSnapshot.assets, lockedSnapshot.useGroups, lockedSnapshot.groups)
+        : "free",
+    [lockedSnapshot],
+  )
 
   // Восстановление данных из localStorage после монтирования. Не читаем window
   // в фазе рендеринга, поэтому сервер и клиент формируют одинаковую разметку
@@ -75,7 +90,42 @@ export function PortfolioRebalancer() {
     setUseGroups(saved.useGroups)
     setGroups(saved.groups)
     setNextGroupId(saved.nextGroupId)
+    setLockedSnapshot(saved.lockedSnapshot ?? null)
   }, [])
+
+  // Автоблокировка при несоответствии портфеля тарифу: сохраняем снапшот и
+  // обнуляем текущий портфель. Восстановление происходит после оплаты/выбора
+  // более высокого тарифа (см. handleTierChange).
+  useEffect(() => {
+    if (isLocked) return
+    const required = getRequiredTier(assets, useGroups, groups)
+    if (tierCovers(required, tier)) return
+
+    setLockedSnapshot({
+      assets,
+      nextId,
+      cashBalance,
+      tier: required,
+      useGroups,
+      groups,
+      nextGroupId,
+      lockedSnapshot: null,
+    })
+    // Возвращаем пустое (свободное, <= 2 активов) состояние.
+    setAssets([])
+    setNextId(1)
+    setCashBalance(0)
+    setAdditionalCash(0)
+    setUseGroups(false)
+    setGroups([])
+    setNextGroupId(1)
+    setEmptyTargetIds(new Set())
+    setAppliedAdjustmentIds(new Set())
+    resetCalculation()
+    setError(null)
+    setNotice(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, useGroups, groups, tier, isLocked])
 
   const analysis = useMemo(() => calculatedAnalysis ?? [], [calculatedAnalysis])
   const portfolioValidation = useMemo(
@@ -348,11 +398,29 @@ export function PortfolioRebalancer() {
   const handleTierChange = useCallback(
     (newTier: Tier) => {
       setTier(newTier)
-      if (newTier !== "pro" && useGroups) {
-        handleUseGroupsChange(false)
+      // После «оплаты» подписки восстанавливаем заблокированный портфель, если
+      // выбранный тариф его покрывает.
+      if (lockedSnapshot && tierCovers(lockedRequiredTier, newTier)) {
+        const snap = lockedSnapshot
+        setLockedSnapshot(null)
+        setAssets(normalizeAssets(snap.assets))
+        setNextId(snap.nextId)
+        setCashBalance(snap.cashBalance ?? 0)
+        setUseGroups(snap.useGroups ?? false)
+        setGroups(snap.groups ?? [])
+        setNextGroupId(snap.nextGroupId ?? 1)
+        setAdditionalCash(0)
+        setAppliedAdjustmentIds(new Set())
+        resetCalculation()
+        setError(null)
+        setNotice(null)
       }
+      // При переходе на тариф, не допускающий группы (Базовый/Бесплатный),
+      // портфель с группами не соответствует новому тарифу — он будет очищен
+      // и сохранён в снапшот эффектом автоблокировки. Оставляем группы как есть,
+      // чтобы логика несоответствия сработала корректно.
     },
-    [useGroups, handleUseGroupsChange],
+    [lockedSnapshot, lockedRequiredTier, resetCalculation],
   )
 
   useEffect(() => {
@@ -364,7 +432,7 @@ export function PortfolioRebalancer() {
       skipFirstSaveRef.current = false
       return
     }
-    PortfolioStorage.save({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId })
+    PortfolioStorage.save({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId, lockedSnapshot })
   }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId])
 
   // Загружаем цены при первом монтировании.
@@ -398,6 +466,7 @@ export function PortfolioRebalancer() {
         setNextGroupId(data.nextGroupId ?? 1)
         setAdditionalCash(0)
         setAppliedAdjustmentIds(new Set())
+        setLockedSnapshot(data.lockedSnapshot ?? null)
         resetCalculation()
         setError(null)
       } catch (err) {
@@ -419,6 +488,7 @@ export function PortfolioRebalancer() {
     setUseGroups(false)
     setGroups([])
     setNextGroupId(1)
+    setLockedSnapshot(null)
     setIsCalculated(false)
     setCalculatedAnalysis(null)
     setCalculatedSpent(null)
@@ -449,6 +519,27 @@ export function PortfolioRebalancer() {
           <TariffsPage tier={tier} onSelectTier={handleTierChange} />
         ) : (
           <div className="space-y-6">
+            {isLocked && (
+              <div className="flex flex-col gap-3 rounded-2xl border border-accent-foreground/20 bg-accent px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-foreground/10 text-accent-foreground">
+                    <Lock className="h-4 w-4" strokeWidth={2.25} />
+                  </span>
+                  <p className="text-sm text-accent-foreground text-pretty">
+                    Ваш портфель соответствует тарифу <strong className="font-medium">{getTierLabel(lockedRequiredTier)}</strong>.
+                    Будет доступен после оплаты подписки.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActivePage("tariffs")}
+                  className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-all hover:opacity-90 active:scale-95 sm:self-center"
+                >
+                  <Tag className="h-4 w-4" strokeWidth={2.25} />
+                  Выбрать тариф
+                </button>
+              </div>
+            )}
+
             <PortfolioSummary
               analysis={analysis}
               assets={assets}

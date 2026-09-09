@@ -21,6 +21,7 @@ const makeData = (): PortfolioData => ({
   useGroups: true,
   groups: [{ id: 1, name: "Банки", percent: 100, color: "#059669" }],
   nextGroupId: 2,
+  lockedSnapshot: null,
 })
 
 /** Мини-эмуляция localStorage под ключ, который использует приложение. */
@@ -72,6 +73,7 @@ describe("PortfolioStorage", () => {
       useGroups: false,
       groups: [],
       nextGroupId: 1,
+      lockedSnapshot: null,
     })
   })
 

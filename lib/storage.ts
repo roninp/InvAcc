@@ -19,6 +19,7 @@ export class PortfolioStorage {
         useGroups: data.useGroups ?? false,
         groups: data.groups ?? [],
         nextGroupId: data.nextGroupId ?? 1,
+        lockedSnapshot: data.lockedSnapshot ?? null,
       }
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload))
     } catch (err) {
@@ -40,6 +41,7 @@ export class PortfolioStorage {
         useGroups: data.useGroups ?? false,
         groups: data.groups ?? [],
         nextGroupId: data.nextGroupId ?? 1,
+        lockedSnapshot: data.lockedSnapshot ?? null,
       }
     } catch {
       return null
@@ -66,6 +68,7 @@ export class PortfolioStorage {
         useGroups: data.useGroups ?? false,
         groups: data.groups ?? [],
         nextGroupId: data.nextGroupId ?? 1,
+        lockedSnapshot: data.lockedSnapshot ?? null,
       }
       const json = JSON.stringify(payload, null, 2)
       const blob = new Blob([json], { type: "application/json" })
@@ -106,6 +109,7 @@ export class PortfolioStorage {
       useGroups: data.useGroups ?? false,
       groups: data.groups ?? [],
       nextGroupId: data.nextGroupId ?? 1,
+      lockedSnapshot: data.lockedSnapshot ?? null,
     }
   }
 

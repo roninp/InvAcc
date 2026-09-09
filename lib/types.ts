@@ -37,6 +37,8 @@ export interface PortfolioData {
   useGroups: boolean
   groups: Group[]
   nextGroupId: number
+  /** Снапшот портфеля, заблокированного из-за несоответствия тарифу (для восстановления после оплаты). */
+  lockedSnapshot?: PortfolioData | null
 }
 
 /** Базовый URL backend-прокси Finam Trade API (пустая строка = same-origin). */
