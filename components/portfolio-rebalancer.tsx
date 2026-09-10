@@ -101,7 +101,7 @@ export function PortfolioRebalancer() {
     const required = getRequiredTier(assets, useGroups, groups)
     if (tierCovers(required, tier)) return
 
-    setLockedSnapshot({
+    const snap: PortfolioData = {
       assets,
       nextId,
       cashBalance,
@@ -110,7 +110,8 @@ export function PortfolioRebalancer() {
       groups,
       nextGroupId,
       lockedSnapshot: null,
-    })
+    }
+    setLockedSnapshot(snap)
     // Возвращаем пустое (свободное, <= 2 активов) состояние.
     setAssets([])
     setNextId(1)
@@ -124,6 +125,22 @@ export function PortfolioRebalancer() {
     resetCalculation()
     setError(null)
     setNotice(null)
+    // Синхронно фиксируем снапшот и очищенный портфель, чтобы не потерять
+    // портфель (в т.ч. группы) при асинхронной записи автосохранения.
+    try {
+      PortfolioStorage.save({
+        assets: [],
+        nextId: 1,
+        cashBalance: 0,
+        tier,
+        useGroups: false,
+        groups: [],
+        nextGroupId: 1,
+        lockedSnapshot: snap,
+      })
+    } catch {
+      /* ignore: автосохранение подстрахует */
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets, useGroups, groups, tier, isLocked])
 
@@ -414,6 +431,22 @@ export function PortfolioRebalancer() {
         resetCalculation()
         setError(null)
         setNotice(null)
+        // Восстановленный портфель фиксируем сразу, чтобы группы и активы не
+        // были потеряны при асинхронной записи автосохранения.
+        try {
+          PortfolioStorage.save({
+            assets: normalizeAssets(snap.assets),
+            nextId: snap.nextId,
+            cashBalance: snap.cashBalance ?? 0,
+            tier: newTier,
+            useGroups: snap.useGroups ?? false,
+            groups: snap.groups ?? [],
+            nextGroupId: snap.nextGroupId ?? 1,
+            lockedSnapshot: null,
+          })
+        } catch {
+          /* ignore: автосохранение подстрахует */
+        }
       }
       // При переходе на тариф, не допускающий группы (Базовый/Бесплатный),
       // портфель с группами не соответствует новому тарифу — он будет очищен
@@ -433,7 +466,7 @@ export function PortfolioRebalancer() {
       return
     }
     PortfolioStorage.save({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId, lockedSnapshot })
-  }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId])
+  }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId, lockedSnapshot])
 
   // Загружаем цены при первом монтировании.
   useEffect(() => {

@@ -122,6 +122,34 @@ describe("PortfolioStorage", () => {
     expect(after?.nextId).toBe(2)
   })
 
+  it("сохраняет и загружает заблокированный снапшот с группами (регрессия потери групп)", () => {
+    const data = makeData()
+    // Актуальный у пользователя на «Про» портфель с группами не соответствует
+    // тарифу «Базовый» → уходит в снапшот с группами.
+    const locked: PortfolioData = {
+      assets: [
+        { id: 1, ticker: "SBER", quantity: 5, price: 290, targetPercent: 60, groupId: 1, lotSize: 10 },
+        { id: 2, ticker: "GAZP", quantity: 3, price: 150, targetPercent: 40, groupId: 1, lotSize: 1 },
+      ],
+      nextId: 3,
+      cashBalance: 500,
+      tier: "pro",
+      useGroups: true,
+      groups: [{ id: 1, name: "Банки", percent: 50, color: "#059669" }],
+      nextGroupId: 2,
+    }
+    const withLock: PortfolioData = { ...data, useGroups: false, groups: [], lockedSnapshot: locked }
+
+    PortfolioStorage.save(withLock)
+    const loaded = PortfolioStorage.load()
+
+    expect(loaded?.lockedSnapshot?.useGroups).toBe(true)
+    expect(loaded?.lockedSnapshot?.groups).toEqual(locked.groups)
+    expect(loaded?.lockedSnapshot?.groups?.[0]?.name).toBe("Банки")
+    expect(loaded?.useGroups).toBe(false)
+    expect(loaded?.groups).toEqual([])
+  })
+
   it("normalizeAssets нормализует lotSize до целого >= 1", () => {
     const normalized = normalizeAssets([
       { id: 1, ticker: "A", quantity: 1, price: 1, targetPercent: 100, groupId: null, lotSize: 0 } as PortfolioData["assets"][number],
