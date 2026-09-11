@@ -140,7 +140,7 @@ export function AssetRow({
             placeholder="0.00"
             aria-label="Цена за штуку"
           />
-          <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+          <span className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
             / {lotPrice.toFixed(priceDecimals)}
           </span>
         </div>
@@ -200,7 +200,7 @@ export function AssetRow({
                 {analysis.adjustment > 0 ? "+" : ""}
                 {formatNumber(Math.round(analysis.adjustment))}
               </span>
-              <span className="text-[11px] tabular-nums opacity-80">
+              <span className="text-xs tabular-nums opacity-80">
                 {analysis.adjustmentValue > 0 ? "+" : ""}
                 {analysis.adjustmentValue.toFixed(2)} ₽
               </span>

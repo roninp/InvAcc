@@ -67,7 +67,7 @@ export function HomePage({
             <ChartCandlestick className="h-7 w-7" strokeWidth={2} />
           </span>
           <div className="min-w-0">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance">
               Ребалансировка портфеля
             </h2>
             <p className="mt-1 text-sm text-muted-foreground text-pretty sm:mt-2 sm:text-base">
@@ -124,7 +124,7 @@ export function HomePage({
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
               <div className="mt-4 flex items-baseline gap-1.5">
-                <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">{plan.price}</span>
+                <span className="font-mono text-2xl font-semibold tracking-tight text-foreground">{plan.price}</span>
                 <span className="text-sm text-muted-foreground">/ {plan.period}</span>
               </div>
 

@@ -63,7 +63,7 @@ export function AssetTable({
                   <button
                     onClick={onApplyAll}
                     disabled={!canApplyAll}
-                    className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-medium normal-case tracking-normal text-primary-foreground transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium normal-case tracking-normal text-primary-foreground transition-all hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                     title="Применить требуемое количество ко всем активам"
                   >
                     <CheckCheck className="h-3.5 w-3.5" strokeWidth={2.25} />

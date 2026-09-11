@@ -230,7 +230,7 @@ export function SettingsPage({
               type="text"
               inputMode="decimal"
               disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm"
+              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums"
             />
           </div>
           <div className="flex items-center justify-between">
@@ -242,7 +242,7 @@ export function SettingsPage({
               type="text"
               inputMode="decimal"
               disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm"
+              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums"
             />
           </div>
         </div>
