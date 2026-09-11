@@ -1,7 +1,7 @@
 "use client"
 
-import { Check, Sparkles } from "lucide-react"
-import type { Tier } from "@/lib/types"
+import { ArrowRight, Check, ChartCandlestick, Sparkles } from "lucide-react"
+import type { Page, Tier } from "@/lib/types"
 
 const PLANS: {
   id: Tier
@@ -49,19 +49,58 @@ const PLANS: {
   },
 ]
 
-export function TariffsPage({ tier, onSelectTier }: { tier: Tier; onSelectTier: (tier: Tier) => void }) {
+export function HomePage({
+  tier,
+  onSelectTier,
+  onNavigate,
+}: {
+  tier: Tier
+  onSelectTier: (tier: Tier) => void
+  onNavigate: (page: Page) => void
+}) {
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance">
-          Выберите подходящий тариф
-        </h2>
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-sm sm:p-10">
+        <div className="flex items-start gap-4 sm:items-center">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
+            <ChartCandlestick className="h-7 w-7" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
+              Ребалансировка портфеля
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground text-pretty sm:mt-2 sm:text-base">
+              Держите инвестиционный портфель на целевых долях вместе с Московской биржей.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-5 text-sm leading-relaxed text-muted-foreground text-pretty sm:text-base">
+          Сервис для частного инвестора, который хочет заметить перекосы в структуре портфеля и привести её к балансу.
+          Введите активы, задайте целевые проценты — и получите расчёт, что и на сколько докупить или продать.
+          Загружайте котировки Мосбиржи, учитывайте свободные деньги и сохраняйте результат в файл.
+        </p>
+
+        <button
+          onClick={() => onNavigate("portfolio")}
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/30 transition-all hover:opacity-90 active:scale-95"
+        >
+          Перейти к портфелю
+          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+      </section>
+
+      {/* Тарифы */}
+      <section className="text-center">
+        <h3 className="text-2xl font-semibold tracking-tight text-foreground text-balance">Выберите подходящий тариф</h3>
         <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground text-pretty">
           Управляйте портфелем эффективнее — от базового расчёта долей до групп активов и мгновенных котировок.
         </p>
-      </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+
         {PLANS.map((plan) => {
           const isCurrent = tier === plan.id
           return (
@@ -78,11 +117,9 @@ export function TariffsPage({ tier, onSelectTier }: { tier: Tier; onSelectTier: 
                 </span>
               )}
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-foreground">{plan.name}</h3>
+                <h4 className="text-base font-semibold text-foreground">{plan.name}</h4>
                 {isCurrent && (
-                  <span className="rounded-md bg-positive-muted px-2 py-0.5 text-xs font-medium text-positive">
-                    Текущий
-                  </span>
+                  <span className="rounded-md bg-positive-muted px-2 py-0.5 text-xs font-medium text-positive">Текущий</span>
                 )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>

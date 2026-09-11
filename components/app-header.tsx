@@ -1,12 +1,12 @@
 "use client"
 
-import { ChartCandlestick, Layers, Settings, Tag } from "lucide-react"
+import { ChartCandlestick, Home, Layers, Settings } from "lucide-react"
 import type { Page, Tier } from "@/lib/types"
 
 const NAV: { id: Page; label: string; icon: typeof Layers }[] = [
+  { id: "home", label: "Главная", icon: Home },
   { id: "portfolio", label: "Портфель", icon: Layers },
   { id: "settings", label: "Настройки", icon: Settings },
-  { id: "tariffs", label: "Тарифы", icon: Tag },
 ]
 
 const TIER_LABEL: Record<Tier, string> = {

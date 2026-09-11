@@ -28,7 +28,7 @@ import { PortfolioSummary } from "./portfolio-summary"
 import { GroupAllocations } from "./group-allocations"
 import { AssetTable } from "./asset-table"
 import { SettingsPage } from "./settings-page"
-import { TariffsPage } from "./tariffs-page"
+import { HomePage } from "./home-page"
 
 export function PortfolioRebalancer() {
   const [assets, setAssets] = useState<Asset[]>([])
@@ -57,7 +57,7 @@ export function PortfolioRebalancer() {
   const [emptyTargetIds, setEmptyTargetIds] = useState<Set<number>>(() => new Set())
   const [appliedAdjustmentIds, setAppliedAdjustmentIds] = useState<Set<number>>(() => new Set())
 
-  const [activePage, setActivePage] = useState<Page>("portfolio")
+  const [activePage, setActivePage] = useState<Page>("home")
   const [tier, setTier] = useState<Tier>("basic")
   const [useGroups, setUseGroups] = useState<boolean>(false)
   const [groups, setGroups] = useState<Group[]>([])
@@ -505,7 +505,9 @@ export function PortfolioRebalancer() {
       <AppHeader activePage={activePage} onNavigate={setActivePage} tier={tier} />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {activePage === "settings" ? (
+        {activePage === "home" ? (
+          <HomePage tier={tier} onSelectTier={handleTierChange} onNavigate={setActivePage} />
+        ) : activePage === "settings" ? (
           <SettingsPage
             tier={tier}
             onTierChange={handleTierChange}
@@ -515,8 +517,6 @@ export function PortfolioRebalancer() {
             onAddGroup={handleAddGroup}
             onRemoveGroup={handleRemoveGroup}
           />
-        ) : activePage === "tariffs" ? (
-          <TariffsPage tier={tier} onSelectTier={handleTierChange} />
         ) : (
           <div className="space-y-6">
             {isLocked && (
@@ -531,11 +531,11 @@ export function PortfolioRebalancer() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setActivePage("tariffs")}
+                  onClick={() => setActivePage("home")}
                   className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-all hover:opacity-90 active:scale-95 sm:self-center"
                 >
                   <Tag className="h-4 w-4" strokeWidth={2.25} />
-                  Выбрать тариф
+                  Перейти к тарифам
                 </button>
               </div>
             )}
