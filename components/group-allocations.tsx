@@ -19,7 +19,7 @@ export function GroupAllocations({ groups, assets }: { groups: Group[]; assets: 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-tight text-foreground">Доли групп в портфеле</h2>
+        <h2 className="text-base font-semibold text-foreground">Доли групп в портфеле</h2>
         <span className="text-xs text-muted-foreground">текущая / цель</span>
       </div>
       <div className="space-y-4">

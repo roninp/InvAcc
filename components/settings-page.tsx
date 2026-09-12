@@ -56,13 +56,13 @@ export function SettingsPage({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">Настройки</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Тарифный план и параметры расчёта портфеля</p>
+        <h2 className="text-2xl font-semibold text-foreground">Настройки</h2>
+        <p className="mt-1 text-sm font-normal text-muted-foreground">Тарифный план и параметры расчёта портфеля</p>
 
         {/* Тариф */}
         <div className="mt-6 border-t border-border pt-6">
-          <div className="font-medium text-foreground">Тарифный план</div>
-          <p className="mb-4 mt-1 text-sm text-muted-foreground">
+          <div className="text-base font-semibold text-foreground">Тарифный план</div>
+          <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
             Выберите тариф. Пока выбирается вручную, в дальнейшем будет браться из БД.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -84,7 +84,7 @@ export function SettingsPage({
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
                   )}
-                  <span className={`text-sm font-semibold ${active ? "text-primary" : "text-foreground"}`}>
+                  <span className={`text-base font-semibold ${active ? "text-primary" : "text-foreground"}`}>
                     {t.label}
                   </span>
                   <span className="mt-1 text-xs text-muted-foreground">{t.desc}</span>
@@ -99,13 +99,13 @@ export function SettingsPage({
           className={`mt-6 flex items-center justify-between border-t border-border pt-6 ${tier !== "pro" ? "opacity-55" : ""}`}
         >
           <div>
-            <div className="flex items-center gap-2 font-medium text-foreground">
+            <div className="flex items-center gap-2 text-base font-semibold text-foreground">
               Использовать группы
               <span className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-semibold text-accent-foreground">
                 Про
               </span>
             </div>
-            <div className="mt-0.5 text-sm text-muted-foreground">Группировка активов по категориям</div>
+            <div className="mt-0.5 text-xs font-normal text-muted-foreground">Группировка активов по категориям</div>
           </div>
           <button
             type="button"
@@ -129,8 +129,8 @@ export function SettingsPage({
         {/* Управление группами */}
         {useGroups && tier === "pro" && (
           <div className="mt-6 border-t border-border pt-6">
-            <div className="font-medium text-foreground">Группы активов</div>
-            <p className="mb-4 mt-1 text-sm text-muted-foreground">
+            <div className="text-base font-semibold text-foreground">Группы активов</div>
+            <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
               Добавьте названия групп и их долю в портфеле. Сумма долей всех групп должна быть 100%.
             </p>
 
@@ -189,7 +189,7 @@ export function SettingsPage({
                         className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
                         style={{ backgroundColor: g.color || "#94a3b8" }}
                       />
-                      <span className="font-medium text-foreground">{g.name}</span>
+                      <span className="text-sm font-normal text-label">{g.name}</span>
                       <span className="font-mono text-sm tabular-nums text-muted-foreground">
                         {g.percent.toFixed(2)}%
                       </span>
@@ -223,8 +223,8 @@ export function SettingsPage({
         <div className="mt-6 space-y-4 border-t border-border pt-6 opacity-55">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-foreground">Процент брокера за покупку</div>
-              <div className="mt-0.5 text-sm text-muted-foreground">Комиссия при покупке, %</div>
+              <div className="text-sm font-normal text-label">Процент брокера за покупку</div>
+              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при покупке, %</div>
             </div>
             <input
               type="text"
@@ -235,8 +235,8 @@ export function SettingsPage({
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-foreground">Процент брокера за продажу</div>
-              <div className="mt-0.5 text-sm text-muted-foreground">Комиссия при продаже, %</div>
+              <div className="text-sm font-normal text-label">Процент брокера за продажу</div>
+              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при продаже, %</div>
             </div>
             <input
               type="text"

@@ -519,6 +519,12 @@ export function PortfolioRebalancer() {
           />
         ) : (
           <div className="space-y-6">
+            <header className="space-y-1">
+              <h2 className="text-2xl font-semibold text-foreground">Портфель</h2>
+              <p className="text-sm font-normal text-muted-foreground">
+                Держите инвестиционный портфель на целевых долях вместе с Московской биржей.
+              </p>
+            </header>
             {isLocked && (
               <div className="flex flex-col gap-3 rounded-2xl border border-accent-foreground/20 bg-accent px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
@@ -593,7 +599,7 @@ export function PortfolioRebalancer() {
                   <Wallet className="h-7 w-7" strokeWidth={1.75} />
                 </span>
                 <h3 className="text-base font-semibold text-foreground">Портфель пуст</h3>
-                <p className="mt-1 max-w-xs text-sm text-muted-foreground text-pretty">
+                <p className="mt-1 max-w-xs text-xs font-normal text-muted-foreground text-pretty">
                   Добавьте активы Московской биржи, чтобы рассчитать ребалансировку.
                 </p>
                 <button
@@ -684,7 +690,7 @@ export function PortfolioRebalancer() {
 
             {/* Как использовать */}
             <div className="rounded-2xl border border-border bg-muted/30 p-5">
-              <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <p className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
                 <Info className="h-4 w-4 text-primary" strokeWidth={2} />
                 Как использовать
               </p>

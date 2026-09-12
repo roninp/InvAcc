@@ -67,16 +67,16 @@ export function HomePage({
             <ChartCandlestick className="h-7 w-7" strokeWidth={2} />
           </span>
           <div className="min-w-0">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground text-balance">
+            <h2 className="text-2xl font-semibold text-foreground">
               Ребалансировка портфеля
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground text-pretty sm:mt-2 sm:text-base">
+            <p className="mt-1 text-sm font-normal text-muted-foreground">
               Держите инвестиционный портфель на целевых долях вместе с Московской биржей.
             </p>
           </div>
         </div>
 
-        <p className="mt-5 text-sm leading-relaxed text-muted-foreground text-pretty sm:text-base">
+        <p className="mt-5 text-sm leading-relaxed text-muted-foreground text-pretty">
           Сервис для частного инвестора, который хочет заметить перекосы в структуре портфеля и привести её к балансу.
           Введите активы, задайте целевые проценты — и получите расчёт, что и на сколько докупить или продать.
           Загружайте котировки Мосбиржи, учитывайте свободные деньги и сохраняйте результат в файл.
@@ -93,8 +93,8 @@ export function HomePage({
 
       {/* Тарифы */}
       <section className="text-center">
-        <h3 className="text-2xl font-semibold tracking-tight text-foreground text-balance">Выберите подходящий тариф</h3>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground text-pretty">
+        <h3 className="text-2xl font-semibold text-foreground">Выберите подходящий тариф</h3>
+        <p className="mx-auto mt-2 max-w-lg text-sm font-normal text-muted-foreground">
           Управляйте портфелем эффективнее — от базового расчёта долей до групп активов и мгновенных котировок.
         </p>
       </section>
@@ -122,7 +122,7 @@ export function HomePage({
                   <span className="rounded-md bg-positive-muted px-2 py-0.5 text-xs font-medium text-positive">Текущий</span>
                 )}
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+              <p className="mt-1 text-xs font-normal text-muted-foreground">{plan.description}</p>
               <div className="mt-4 flex items-baseline gap-1.5">
                 <span className="font-mono text-2xl font-semibold tracking-tight text-foreground">{plan.price}</span>
                 <span className="text-sm text-muted-foreground">/ {plan.period}</span>
@@ -130,7 +130,7 @@ export function HomePage({
 
               <ul className="mt-5 flex-1 space-y-3">
                 {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm text-foreground">
+                  <li key={feature} className="flex items-start gap-2.5 text-sm font-normal text-label">
                     <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-positive-muted text-positive">
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>

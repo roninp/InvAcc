@@ -38,7 +38,7 @@ export function PortfolioSummary({
       <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Стоимость активов</p>
+            <p className="text-base font-semibold text-foreground">Стоимость активов</p>
             <p className="mt-2 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
               {formatRub(totalValue)}
             </p>
@@ -47,7 +47,7 @@ export function PortfolioSummary({
             <TrendingUp className="h-4.5 w-4.5" strokeWidth={2} />
           </span>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-xs font-normal text-muted-foreground">
           {assets.length} {pluralAssets(assets.length)} в портфеле
         </p>
       </div>
@@ -55,7 +55,7 @@ export function PortfolioSummary({
       {/* Деньги */}
       <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm transition-shadow duration-300 hover:shadow-md">
         <div className="flex items-start justify-between">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Свободные деньги</p>
+          <p className="text-base font-semibold text-foreground">Свободные деньги</p>
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
             <Wallet className="h-4.5 w-4.5" strokeWidth={2} />
           </span>
@@ -93,7 +93,7 @@ export function PortfolioSummary({
         <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-primary/80">Стоимость портфеля</p>
+            <p className="text-base font-semibold text-foreground">Стоимость портфеля</p>
             <p className="mt-2 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground">
               {formatRub(portfolioValue)}
             </p>
@@ -103,7 +103,7 @@ export function PortfolioSummary({
           </span>
         </div>
         <div className="mt-3">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between text-xs font-normal text-muted-foreground">
             <span>Доля денег</span>
             <span className="font-mono tabular-nums text-foreground">{cashShare.toFixed(1)}%</span>
           </div>
