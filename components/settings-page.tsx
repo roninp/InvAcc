@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Info, Plus, Trash2 } from "lucide-react"
+import { Check, Plus, Trash2 } from "lucide-react"
 import { GROUP_COLORS, type Group, type Tier } from "@/lib/types"
 
 const TIERS: { id: Tier; label: string; desc: string }[] = [
@@ -61,7 +61,7 @@ export function SettingsPage({
 
         {/* Тариф */}
         <div className="mt-6 border-t border-border pt-6">
-          <div className="text-base font-semibold text-foreground">Тарифный план</div>
+          <div className="text-base font-semibold text-slate-900">Тарифный план</div>
           <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
             Выберите тариф. Пока выбирается вручную, в дальнейшем будет браться из БД.
           </p>
@@ -99,7 +99,7 @@ export function SettingsPage({
           className={`mt-6 flex items-center justify-between border-t border-border pt-6 ${tier !== "pro" ? "opacity-55" : ""}`}
         >
           <div>
-            <div className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
               Использовать группы
               <span className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-semibold text-accent-foreground">
                 Про
@@ -129,7 +129,7 @@ export function SettingsPage({
         {/* Управление группами */}
         {useGroups && tier === "pro" && (
           <div className="mt-6 border-t border-border pt-6">
-            <div className="text-base font-semibold text-foreground">Группы активов</div>
+            <div className="text-base font-semibold text-slate-900">Группы активов</div>
             <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
               Добавьте названия групп и их долю в портфеле. Сумма долей всех групп должна быть 100%.
             </p>
@@ -220,36 +220,37 @@ export function SettingsPage({
         )}
 
         {/* Комиссии брокера — заглушки */}
-        <div className="mt-6 space-y-4 border-t border-border pt-6 opacity-55">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-normal text-label">Процент брокера за покупку</div>
-              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при покупке, %</div>
-            </div>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-normal text-label">Процент брокера за продажу</div>
-              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при продаже, %</div>
-            </div>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums"
-            />
-          </div>
-        </div>
+        <div className="mt-6 space-y-4 border-t border-border pt-6">
+          <div className="text-base font-semibold text-slate-900">Процент брокера</div>
 
-        <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
-          Настройки брокера пока неактивны и будут реализованы позже.
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50/50 p-3 text-sm font-normal text-slate-600 leading-relaxed">
+            <span aria-hidden="true" className="shrink-0">⏳</span>
+            <span>Настройки брокера пока неактивны и будут реализованы позже.</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-700">Процент брокера за покупку</div>
+              <div className="mt-0.5 text-sm font-normal text-slate-600 leading-relaxed">Комиссия при покупке, %</div>
+            </div>
+            <input
+              type="text"
+              inputMode="decimal"
+              disabled
+              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums disabled:opacity-50"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-700">Процент брокера за продажу</div>
+              <div className="mt-0.5 text-sm font-normal text-slate-600 leading-relaxed">Комиссия при продаже, %</div>
+            </div>
+            <input
+              type="text"
+              inputMode="decimal"
+              disabled
+              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums disabled:opacity-50"
+            />
+          </div>
         </div>
       </div>
     </div>
