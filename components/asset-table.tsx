@@ -22,7 +22,7 @@ interface AssetTableProps {
   onApplyAll: () => void
 }
 
-const th = "px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+const th = "px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
 
 export function AssetTable({
   assets,
@@ -51,11 +51,11 @@ export function AssetTable({
             <tr className="border-b border-border bg-muted/50">
               <th className={`${th} text-left`}>Актив</th>
               {useGroups && <th className={`${th} text-left`}>Группа</th>}
-              <th className={`${th} text-left`}>Кол-во</th>
+              <th className={`${th} text-right`}>Кол-во</th>
               <th className={`${th} text-right`}>Цена шт. / лот</th>
               <th className={`${th} text-right`}>Сумма</th>
-              <th className={`${th} text-left`}>Цель %</th>
-              <th className={`${th} text-center`}>Текущий %</th>
+              <th className={`${th} text-right`}>Цель %</th>
+              <th className={`${th} text-right`}>Текущий %</th>
               <th className={`${th} text-right`}>Требуется</th>
               <th className={`${th} text-right`}>
                 <div className="flex items-center justify-end gap-2">

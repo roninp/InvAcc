@@ -45,11 +45,9 @@ export function AssetRow({
   groups,
 }: AssetRowProps) {
   const groupColorHex = useGroups ? getGroupColor(asset.groupId, groups) : null
+  const lotSize = PortfolioCalculator.getLotSize(asset)
   const priceDecimals = PortfolioCalculator.getPriceDecimals(asset.price)
-  const lotPrice = PortfolioCalculator.roundUpToDecimals(
-    PortfolioCalculator.getLotSize(asset) * asset.price,
-    priceDecimals,
-  )
+  const lotPrice = PortfolioCalculator.roundUpToDecimals(lotSize * asset.price, priceDecimals)
 
   const percentStyles = (() => {
     if (!analysis) return ""
@@ -58,13 +56,13 @@ export function AssetRow({
     return "bg-info-muted text-info"
   })()
 
-  const adjustmentColor = analysis
+  const adjustmentBadge = analysis
     ? analysis.adjustment > 0.1
-      ? "text-positive"
+      ? "bg-emerald-50 text-emerald-700"
       : analysis.adjustment < -0.1
-        ? "text-negative"
-        : "text-muted-foreground"
-    : "text-muted-foreground"
+        ? "bg-rose-50 text-rose-700"
+        : "bg-muted text-muted-foreground"
+    : "bg-muted text-muted-foreground"
 
   return (
     <tr
@@ -74,7 +72,7 @@ export function AssetRow({
       style={animate ? { animationDelay: `${Math.min(animateDelay, 9) * 0.04}s` } : undefined}
     >
       {/* Актив */}
-      <td className="px-3 py-3 align-middle">
+      <td className="px-4 py-3 align-middle">
         <div className="flex items-center gap-2">
           {useGroups && (
             <span
@@ -97,7 +95,7 @@ export function AssetRow({
 
       {/* Группа */}
       {useGroups && (
-        <td className="px-3 py-3 align-middle">
+        <td className="px-4 py-3 align-middle">
           <select
             value={asset.groupId ?? ""}
             onChange={(e) => onUpdate({ ...asset, groupId: e.target.value === "" ? null : Number(e.target.value) })}
@@ -115,7 +113,7 @@ export function AssetRow({
       )}
 
       {/* Кол-во */}
-      <td className="px-3 py-3 align-middle">
+      <td className="px-4 py-3 align-middle">
         <NumericInput
           value={asset.quantity}
           onChange={(val) => {
@@ -130,7 +128,7 @@ export function AssetRow({
       </td>
 
       {/* Цена за шт./лот */}
-      <td className="px-3 py-3 align-middle">
+      <td className="px-4 py-3 align-middle">
         <div className="flex items-center justify-end gap-2">
           <NumericInput
             value={asset.price}
@@ -140,19 +138,21 @@ export function AssetRow({
             placeholder="0.00"
             aria-label="Цена за штуку"
           />
-          <span className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
-            / {lotPrice.toFixed(priceDecimals)}
-          </span>
+          {lotSize > 1 && (
+            <span className="whitespace-nowrap font-mono text-xs tabular-nums text-slate-400">
+              За лот: {lotPrice.toFixed(priceDecimals)} ({lotSize} шт.)
+            </span>
+          )}
         </div>
       </td>
 
       {/* Сумма */}
-      <td className="px-3 py-3 text-right align-middle font-mono text-sm font-medium tabular-nums text-foreground">
+      <td className="px-4 py-3 text-right align-middle font-mono text-sm font-medium tabular-nums text-foreground">
         {analysis ? formatRub(analysis.currentValue) : "—"}
       </td>
 
       {/* Цель % */}
-      <td className="px-3 py-3 align-middle">
+      <td className="px-4 py-3 align-middle">
         <div className="flex items-center gap-1">
           <NumericInput
             value={asset.targetPercent}
@@ -174,7 +174,7 @@ export function AssetRow({
       </td>
 
       {/* Текущий % */}
-      <td className="px-3 py-3 text-center align-middle">
+      <td className="px-4 py-3 text-right align-middle">
         {analysis ? (
           <span
             className={`inline-block min-w-[3.5rem] rounded-full px-2.5 py-1 font-mono text-xs font-semibold tabular-nums ${percentStyles}`}
@@ -187,20 +187,22 @@ export function AssetRow({
       </td>
 
       {/* Требуется */}
-      <td className="px-3 py-3 text-right align-middle font-mono text-sm tabular-nums text-muted-foreground">
+      <td className="px-4 py-3 text-right align-middle font-mono text-sm tabular-nums text-foreground">
         {analysis ? formatNumber(Math.round(analysis.requiredQuantity)) : "—"}
       </td>
 
       {/* Купить / Продать */}
-      <td className={`px-3 py-3 text-right align-middle font-mono text-sm font-medium ${adjustmentColor}`}>
+      <td className="px-4 py-3 text-right align-middle">
         {analysis && isAdjustmentActive ? (
           <div className="flex items-center justify-end gap-2">
             <div className="flex flex-col items-end leading-tight">
-              <span className="tabular-nums">
+              <span
+                className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ${adjustmentBadge}`}
+              >
                 {analysis.adjustment > 0 ? "+" : ""}
                 {formatNumber(Math.round(analysis.adjustment))}
               </span>
-              <span className="text-xs tabular-nums opacity-80">
+              <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                 {analysis.adjustmentValue > 0 ? "+" : ""}
                 {analysis.adjustmentValue.toFixed(2)} ₽
               </span>
@@ -220,7 +222,7 @@ export function AssetRow({
       </td>
 
       {/* Удалить */}
-      <td className="px-3 py-3 text-center align-middle">
+      <td className="px-4 py-3 text-center align-middle">
         <button
           onClick={() => onRemove(asset.id)}
           disabled={isLastAsset}
