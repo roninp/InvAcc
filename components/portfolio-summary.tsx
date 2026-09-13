@@ -65,7 +65,7 @@ export function PortfolioSummary({
             value={cashBalance || null}
             onChange={onCashBalanceChange}
             aria-label="Остаток денежных средств"
-            className="w-full rounded-lg border border-transparent bg-transparent px-0 py-0.5 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground outline-none transition-colors hover:border-border focus:border-ring focus:bg-background focus:px-2"
+            className="w-full rounded-lg border border-input bg-background px-3 py-0.5 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground outline-none transition-all focus:ring-2 focus:ring-ring/40"
             placeholder="0.00"
           />
         </div>
