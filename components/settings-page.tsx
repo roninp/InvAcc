@@ -140,7 +140,7 @@ export function SettingsPage({
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="Название (например, Акции)"
-                className="min-w-[200px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/40"
+                className="min-w-[200px] flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/40 placeholder:text-label"
               />
               <input
                 type="text"
@@ -151,7 +151,7 @@ export function SettingsPage({
                   if (v === "" || /^\d+\.?\d*$/.test(v) || /^\d*\.?\d+$/.test(v)) setNewGroupPercent(v)
                 }}
                 placeholder="Доля %"
-                className="w-24 rounded-lg border border-input bg-background px-3 py-2 text-right font-mono text-sm tabular-nums outline-none transition-shadow focus:ring-2 focus:ring-ring/40"
+                className="w-24 rounded-lg border border-input bg-background px-3 py-2 text-right font-mono text-sm tabular-nums outline-none transition-shadow focus:ring-2 focus:ring-ring/40 placeholder:text-label"
               />
               <label
                 className="flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm transition-colors hover:border-primary/40"
@@ -163,7 +163,7 @@ export function SettingsPage({
                   onChange={(e) => setNewGroupColor(e.target.value)}
                   className="h-7 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
                 />
-                <span className="text-muted-foreground">Цвет</span>
+                <span className="text-label">Цвет</span>
               </label>
               <button
                 type="button"
