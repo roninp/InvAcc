@@ -219,39 +219,6 @@ export function SettingsPage({
           </div>
         )}
 
-        {/* Комиссии брокера — заглушки */}
-        <div className="mt-6 space-y-4 border-t border-border pt-6">
-          <div className="text-base font-semibold text-foreground">Процент брокера</div>
-
-          <div className="flex items-start gap-2 rounded-lg bg-amber-50/50 p-3">
-            <span aria-hidden="true" className="shrink-0">⏳</span>
-            <span className="text-sm font-normal text-slate-600 leading-relaxed">Настройки брокера пока неактивны и будут реализованы позже.</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-normal text-label">Процент брокера за покупку</div>
-              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при покупке, %</div>
-            </div>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums disabled:opacity-50"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-normal text-label">Процент брокера за продажу</div>
-              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при продаже, %</div>
-            </div>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled
-              className="w-28 cursor-not-allowed rounded-lg border border-input bg-muted px-3 py-2 text-right font-mono text-sm tabular-nums disabled:opacity-50"
-            />
-          </div>
-        </div>
       </div>
     </div>
   )
