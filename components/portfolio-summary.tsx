@@ -64,15 +64,17 @@ export function PortfolioSummary({
           <NumericInput
             value={cashBalance || null}
             onChange={onCashBalanceChange}
+            live
             aria-label="Остаток денежных средств"
             className="w-full rounded-lg border border-input bg-background px-3 py-0.5 font-mono text-2xl font-semibold tabular-nums tracking-tight text-foreground outline-none transition-all focus:ring-2 focus:ring-ring/40"
-            placeholder="0.00"
+            placeholder=""
           />
         </div>
         <div className="mt-3 flex gap-2">
           <NumericInput
             value={additionalCash || null}
             onChange={onAdditionalCashChange}
+            live
             aria-label="Сумма для добавления"
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-right font-mono text-sm tabular-nums outline-none transition-shadow focus:ring-2 focus:ring-ring/40"
             placeholder="Внести сумму"
