@@ -130,7 +130,7 @@ export function SettingsPage({
         {useGroups && tier === "pro" && (
           <div className="mt-6 border-t border-border pt-6">
             <div className="text-base font-semibold text-foreground">Группы активов</div>
-            <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
+            <p className="mb-4 mt-1 text-sm font-normal text-muted-foreground">
               Добавьте названия групп и их долю в портфеле. Сумма долей всех групп должна быть 100%.
             </p>
 
