@@ -61,7 +61,7 @@ export function SettingsPage({
 
         {/* Тариф */}
         <div className="mt-6 border-t border-border pt-6">
-          <div className="text-base font-semibold text-slate-900">Тарифный план</div>
+          <div className="text-base font-semibold text-foreground">Тарифный план</div>
           <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
             Выберите тариф. Пока выбирается вручную, в дальнейшем будет браться из БД.
           </p>
@@ -84,7 +84,7 @@ export function SettingsPage({
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
                   )}
-                  <span className={`text-base font-semibold ${active ? "text-primary" : "text-foreground"}`}>
+                  <span className={`text-base font-medium ${active ? "text-primary" : "text-foreground"}`}>
                     {t.label}
                   </span>
                   <span className="mt-1 text-xs text-muted-foreground">{t.desc}</span>
@@ -99,7 +99,7 @@ export function SettingsPage({
           className={`mt-6 flex items-center justify-between border-t border-border pt-6 ${tier !== "pro" ? "opacity-55" : ""}`}
         >
           <div>
-            <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
+            <div className="flex items-center gap-2 text-base font-semibold text-foreground">
               Использовать группы
               <span className="rounded-md bg-accent px-1.5 py-0.5 text-xs font-semibold text-accent-foreground">
                 Про
@@ -129,7 +129,7 @@ export function SettingsPage({
         {/* Управление группами */}
         {useGroups && tier === "pro" && (
           <div className="mt-6 border-t border-border pt-6">
-            <div className="text-base font-semibold text-slate-900">Группы активов</div>
+            <div className="text-base font-semibold text-foreground">Группы активов</div>
             <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
               Добавьте названия групп и их долю в портфеле. Сумма долей всех групп должна быть 100%.
             </p>
@@ -221,16 +221,16 @@ export function SettingsPage({
 
         {/* Комиссии брокера — заглушки */}
         <div className="mt-6 space-y-4 border-t border-border pt-6">
-          <div className="text-base font-semibold text-slate-900">Процент брокера</div>
+          <div className="text-base font-semibold text-foreground">Процент брокера</div>
 
-          <div className="flex items-start gap-2 rounded-lg bg-amber-50/50 p-3 text-sm font-normal text-slate-600 leading-relaxed">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50/50 p-3">
             <span aria-hidden="true" className="shrink-0">⏳</span>
-            <span>Настройки брокера пока неактивны и будут реализованы позже.</span>
+            <span className="text-sm font-normal text-slate-600 leading-relaxed">Настройки брокера пока неактивны и будут реализованы позже.</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-slate-700">Процент брокера за покупку</div>
-              <div className="mt-0.5 text-sm font-normal text-slate-600 leading-relaxed">Комиссия при покупке, %</div>
+              <div className="text-sm font-normal text-label">Процент брокера за покупку</div>
+              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при покупке, %</div>
             </div>
             <input
               type="text"
@@ -241,8 +241,8 @@ export function SettingsPage({
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-slate-700">Процент брокера за продажу</div>
-              <div className="mt-0.5 text-sm font-normal text-slate-600 leading-relaxed">Комиссия при продаже, %</div>
+              <div className="text-sm font-normal text-label">Процент брокера за продажу</div>
+              <div className="mt-0.5 text-xs font-normal text-muted-foreground">Комиссия при продаже, %</div>
             </div>
             <input
               type="text"
