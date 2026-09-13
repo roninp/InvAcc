@@ -9,13 +9,16 @@ interface NumericInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   onEmptyChange?: (isEmpty: boolean) => void
   /** Передавать значение onChange сразу при вводе, не дожидаясь потери фокуса. */
   live?: boolean
+  /** Отображать значение 0 как пустое поле (по умолчанию показывается «0»). */
+  emptyOnZero?: boolean
 }
 
 /**
  * Интеллектуальное числовое поле ввода. Логика ввода сохранена из оригинала.
  */
-export function NumericInput({ value, onChange, isInteger = false, onEmptyChange, live = false, ...inputProps }: NumericInputProps) {
-  const [rawValue, setRawValue] = useState(value != null ? String(value) : "")
+export function NumericInput({ value, onChange, isInteger = false, onEmptyChange, live = false, emptyOnZero = false, ...inputProps }: NumericInputProps) {
+  const formatRaw = (v: number | null) => (emptyOnZero && v === 0 ? "" : v != null ? String(v) : "")
+  const [rawValue, setRawValue] = useState(formatRaw(value))
   const [isFocused, setIsFocused] = useState(false)
   const onEmptyChangeRef = useRef(onEmptyChange)
   onEmptyChangeRef.current = onEmptyChange
@@ -23,7 +26,7 @@ export function NumericInput({ value, onChange, isInteger = false, onEmptyChange
   useEffect(() => {
     // Пока пользователь печатает — не затирать набираемое значение внешними изменениями prop.
     if (!isFocused) {
-      setRawValue(value != null ? String(value) : "")
+      setRawValue(formatRaw(value))
     }
     if (value != null && value !== 0) {
       onEmptyChangeRef.current?.(false)

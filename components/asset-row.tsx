@@ -121,6 +121,7 @@ export function AssetRow({
             onQuantityChanged(asset.id)
           }}
           isInteger
+          emptyOnZero
           className={`w-20 text-right font-mono tabular-nums ${inputBase}`}
           placeholder="0"
           aria-label="Количество лотов"
