@@ -62,7 +62,7 @@ export function SettingsPage({
         {/* Тариф */}
         <div className="mt-6 border-t border-border pt-6">
           <div className="text-base font-semibold text-foreground">Тарифный план</div>
-          <p className="mb-4 mt-1 text-xs font-normal text-muted-foreground">
+          <p className="mb-4 mt-1 text-sm font-normal text-muted-foreground">
             Выберите тариф. Пока выбирается вручную, в дальнейшем будет браться из БД.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -87,7 +87,7 @@ export function SettingsPage({
                   <span className={`text-base font-medium ${active ? "text-primary" : "text-foreground"}`}>
                     {t.label}
                   </span>
-                  <span className="mt-1 text-xs text-muted-foreground">{t.desc}</span>
+                  <span className="mt-1 text-sm text-muted-foreground">{t.desc}</span>
                 </button>
               )
             })}
@@ -105,7 +105,7 @@ export function SettingsPage({
                 Про
               </span>
             </div>
-            <div className="mt-0.5 text-xs font-normal text-muted-foreground">Группировка активов по категориям</div>
+            <div className="mt-0.5 text-sm font-normal text-muted-foreground">Группировка активов по категориям</div>
           </div>
           <button
             type="button"

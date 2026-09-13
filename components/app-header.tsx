@@ -34,12 +34,12 @@ export function AppHeader({
             </div>
             <div className="leading-tight">
               <h1 className="text-base font-semibold tracking-tight text-foreground">Ребалансировка</h1>
-              <p className="hidden text-xs text-muted-foreground sm:block">Портфель Московской биржи</p>
+              <p className="hidden text-sm text-muted-foreground sm:block">Портфель Московской биржи</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground sm:inline-flex">
+            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-sm font-medium text-muted-foreground sm:inline-flex">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
               Тариф: <span className="text-foreground">{TIER_LABEL[tier]}</span>
             </span>
