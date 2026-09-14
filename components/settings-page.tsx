@@ -7,7 +7,7 @@ import { GROUP_COLORS, type Group, type Tier } from "@/lib/types"
 const TIERS: { id: Tier; label: string; desc: string }[] = [
   { id: "free", label: "Бесплатный", desc: "До 2 активов" },
   { id: "basic", label: "Базовый", desc: "До 100 активов" },
-  { id: "pro", label: "Про", desc: "Группы + быстрые цены" },
+  { id: "pro", label: "Про", desc: "Группы, быстрые цены, до 7 портфелей" },
 ]
 
 export function SettingsPage({

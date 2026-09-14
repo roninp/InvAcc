@@ -29,16 +29,46 @@ export interface AssetAnalysis extends Asset {
   isUnderweight: boolean
 }
 
-export interface PortfolioData {
+/** Содержимое одного портфеля (всё, что относится к его расчёту). */
+export interface PortfolioContent {
   assets: Asset[]
   nextId: number
   cashBalance: number
-  tier: Tier
   useGroups: boolean
   groups: Group[]
   nextGroupId: number
-  /** Снапшот портфеля, заблокированного из-за несоответствия тарифу (для восстановления после оплаты). */
-  lockedSnapshot?: PortfolioData | null
+}
+
+/** Портфель = содержимое + идентификация + снапшот блокировки. */
+export interface Portfolio extends PortfolioContent {
+  id: number
+  name: string
+  /** Снапшот содержимого, заблокированного из-за несоответствия тарифу (для восстановления после оплаты). */
+  lockedSnapshot?: PortfolioContent | null
+}
+
+/** Корневое состояние приложения, сохраняемое в localStorage. */
+export interface PortfoliosState {
+  version: number
+  tier: Tier
+  nextPortfolioId: number
+  activePortfolioId: number
+  portfolios: Portfolio[]
+}
+
+/** Создаёт портфель в пустом состоянии. */
+export function createEmptyPortfolio(id: number, name: string): Portfolio {
+  return {
+    id,
+    name,
+    assets: [],
+    nextId: 1,
+    cashBalance: 0,
+    useGroups: false,
+    groups: [],
+    nextGroupId: 1,
+    lockedSnapshot: null,
+  }
 }
 
 /** Базовый URL backend-прокси Finam Trade API (пустая строка = same-origin). */

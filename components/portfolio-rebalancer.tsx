@@ -21,17 +21,34 @@ import { PortfolioCalculator } from "@/lib/portfolio-calculator"
 import { MoexPriceService, TBankProxyPriceService, type PriceResult } from "@/lib/price-service"
 import { AssetValidator } from "@/lib/validator"
 import { PortfolioStorage, normalizeAssets } from "@/lib/storage"
-import { getRequiredTier, getTierLabel, tierCovers, TIER_MAX_ASSETS } from "@/lib/tariff"
-import { PRICE_REFRESH_COOLDOWN_SECONDS, type Asset, type AssetAnalysis, type Group, type Page, type PortfolioData, type Tier } from "@/lib/types"
+import { canAddPortfolio, getRequiredTier, getTierLabel, tierCovers, TIER_MAX_ASSETS } from "@/lib/tariff"
+import {
+  PRICE_REFRESH_COOLDOWN_SECONDS,
+  createEmptyPortfolio,
+  type Asset,
+  type AssetAnalysis,
+  type Group,
+  type Page,
+  type Portfolio,
+  type PortfolioContent,
+  type Tier,
+} from "@/lib/types"
 import { AppHeader } from "./app-header"
 import { PortfolioSummary } from "./portfolio-summary"
 import { GroupAllocations } from "./group-allocations"
 import { AssetTable } from "./asset-table"
 import { SettingsPage } from "./settings-page"
 import { HomePage } from "./home-page"
+import { PortfolioSwitcher } from "./portfolio-switcher"
+
+const DEFAULT_PORTFOLIO: Portfolio = createEmptyPortfolio(1, "Основной")
 
 export function PortfolioRebalancer() {
-  const [assets, setAssets] = useState<Asset[]>([])
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([DEFAULT_PORTFOLIO])
+  const [activePortfolioId, setActivePortfolioId] = useState<number>(1)
+  const [nextPortfolioId, setNextPortfolioId] = useState<number>(2)
+  const [tier, setTier] = useState<Tier>("basic")
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -43,8 +60,6 @@ export function PortfolioRebalancer() {
   // затирала localStorage (иначе портфель терялся бы при перезапуске).
   const skipFirstSaveRef = useRef(true)
 
-  const [nextId, setNextId] = useState<number>(1)
-  const [cashBalance, setCashBalance] = useState<number>(0)
   const [additionalCash, setAdditionalCash] = useState(0)
 
   const [isCalculated, setIsCalculated] = useState(false)
@@ -58,79 +73,29 @@ export function PortfolioRebalancer() {
   const [appliedAdjustmentIds, setAppliedAdjustmentIds] = useState<Set<number>>(() => new Set())
 
   const [activePage, setActivePage] = useState<Page>("home")
-  const [tier, setTier] = useState<Tier>("basic")
-  const [useGroups, setUseGroups] = useState<boolean>(false)
-  const [groups, setGroups] = useState<Group[]>([])
-  const [nextGroupId, setNextGroupId] = useState<number>(1)
-  const [lockedSnapshot, setLockedSnapshot] = useState<PortfolioData | null>(null)
 
-  const maxAssets = useMemo(() => TIER_MAX_ASSETS[tier], [tier])
-
-  // Портфель заблокирован (не соответствует текущему тарифу), ожидает оплаты.
-  const isLocked = lockedSnapshot != null
-  // Лучший тариф, которому соответствует сохранённый (заблокированный) портфель.
-  const lockedRequiredTier = useMemo(
-    () =>
-      lockedSnapshot
-        ? getRequiredTier(lockedSnapshot.assets, lockedSnapshot.useGroups, lockedSnapshot.groups)
-        : "free",
-    [lockedSnapshot],
+  // --- Активный портфель и его содержимое -------------------------------------------------
+  const activePortfolio = useMemo(
+    () => portfolios.find((p) => p.id === activePortfolioId) ?? portfolios[0] ?? null,
+    [portfolios, activePortfolioId],
   )
 
-  // Восстановление данных из localStorage после монтирования. Не читаем window
-  // в фазе рендеринга, поэтому сервер и клиент формируют одинаковую разметку
-  // и гидратация проходит без ошибок.
-  useEffect(() => {
-    const saved = PortfolioStorage.load()
-    if (!saved) return
-    setAssets(normalizeAssets(saved.assets || []))
-    setNextId(saved.nextId)
-    setCashBalance(saved.cashBalance)
-    setTier(saved.tier)
-    setUseGroups(saved.useGroups)
-    setGroups(saved.groups)
-    setNextGroupId(saved.nextGroupId)
-    setLockedSnapshot(saved.lockedSnapshot ?? null)
-  }, [])
+  const assets = activePortfolio?.assets ?? []
+  const nextId = activePortfolio?.nextId ?? 1
+  const cashBalance = activePortfolio?.cashBalance ?? 0
+  const useGroups = activePortfolio?.useGroups ?? false
+  const groups = activePortfolio?.groups ?? []
+  const isLocked = activePortfolio?.lockedSnapshot != null
 
-  // Автоблокировка при несоответствии портфеля тарифу: сохраняем снапшот и
-  // обнуляем текущий портфель. Восстановление происходит после оплаты/выбора
-  // более высокого тарифа (см. handleTierChange).
-  useEffect(() => {
-    if (isLocked) return
-    const required = getRequiredTier(assets, useGroups, groups)
-    if (tierCovers(required, tier)) return
+  const lockedRequiredTier = useMemo(() => {
+    const snap = activePortfolio?.lockedSnapshot
+    return snap ? getRequiredTier(snap.assets, snap.useGroups, snap.groups) : "free"
+  }, [activePortfolio])
 
-    setLockedSnapshot({
-      assets,
-      nextId,
-      cashBalance,
-      tier: required,
-      useGroups,
-      groups,
-      nextGroupId,
-      lockedSnapshot: null,
-    })
-    // Возвращаем пустое (свободное, <= 2 активов) состояние.
-    setAssets([])
-    setNextId(1)
-    setCashBalance(0)
-    setAdditionalCash(0)
-    setUseGroups(false)
-    setGroups([])
-    setNextGroupId(1)
-    setEmptyTargetIds(new Set())
-    setAppliedAdjustmentIds(new Set())
-    resetCalculation()
-    setError(null)
-    setNotice(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, useGroups, groups, tier, isLocked])
-
-  const analysis = useMemo(() => calculatedAnalysis ?? [], [calculatedAnalysis])
-  const portfolioValidation = useMemo(
-    () => AssetValidator.validatePortfolio(assets, useGroups ? groups : null),
-    [assets, useGroups, groups],
+  const maxAssets = useMemo(() => TIER_MAX_ASSETS[tier], [tier])
+  const canAddPortfolioFlag = useMemo(
+    () => canAddPortfolio(tier, portfolios.length),
+    [tier, portfolios.length],
   )
 
   const resetCalculation = useCallback(() => {
@@ -140,6 +105,19 @@ export function PortfolioRebalancer() {
     setCalculatedSales(null)
   }, [])
 
+  /** Атомарная правка содержимого активного портфеля. */
+  const updateActiveContent = useCallback(
+    (patch: Partial<PortfolioContent> | ((current: Portfolio) => Portfolio)) => {
+      setPortfolios((prev) => {
+        const targetId = activePortfolio?.id
+        if (targetId == null) return prev
+        return prev.map((p) => (p.id === targetId ? (typeof patch === "function" ? patch(p) : { ...p, ...patch }) : p))
+      })
+    },
+    [activePortfolio],
+  )
+
+  // --- Cooldown кнопки «Обновить цены» (только «Про») -------------------------------------
   const startPriceRefreshCooldown = useCallback(() => {
     if (tier !== "pro") return
     if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current)
@@ -171,6 +149,65 @@ export function PortfolioRebalancer() {
     }
   }, [tier, priceRefreshCooldown])
 
+  // Восстановление данных из localStorage после монтирования. Не читаем window
+  // в фазе рендеринга, поэтому сервер и клиент формируют одинаковую разметку
+  // и гидратация проходит без ошибок.
+  useEffect(() => {
+    const saved = PortfolioStorage.load()
+    if (!saved) return
+    const portfs = (saved.portfolios || []).map((p) => ({
+      ...p,
+      assets: normalizeAssets(p.assets || []),
+      groups: p.groups || [],
+    }))
+    if (portfs.length === 0) return
+    const validActive =
+      saved.activePortfolioId != null && portfs.some((p) => p.id === saved.activePortfolioId)
+        ? saved.activePortfolioId
+        : portfs[0].id
+    setPortfolios(portfs)
+    setActivePortfolioId(validActive)
+    setNextPortfolioId(saved.nextPortfolioId ?? portfs.length + 1)
+    setTier(saved.tier ?? "basic")
+  }, [])
+
+  // Автоблокировка активного портфеля при несоответствии тарифу: сохраняем снапшот
+  // содержимого и очищаем его. Восстановление происходит после оплаты/выбора
+  // более высокого тарифа (см. handleTierChange). Остальные портфели не затрагиваются.
+  useEffect(() => {
+    if (!activePortfolio || isLocked) return
+    const required = getRequiredTier(assets, useGroups, groups)
+    if (tierCovers(required, tier)) return
+    const snap: PortfolioContent = { assets, nextId, cashBalance, useGroups, groups, nextGroupId: activePortfolio.nextGroupId }
+    updateActiveContent((p) => ({
+      ...p,
+      lockedSnapshot: snap,
+      assets: [],
+      nextId: 1,
+      cashBalance: 0,
+      useGroups: false,
+      groups: [],
+      nextGroupId: 1,
+    }))
+    setAdditionalCash(0)
+    setEmptyTargetIds(new Set())
+    setAppliedAdjustmentIds(new Set())
+    resetCalculation()
+    setError(null)
+    setNotice(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, useGroups, groups, tier, isLocked, activePortfolio])
+
+  // Авто-save. Пропускаем первый вызов на монтировании, когда restore-эффект ещё
+  // подтягивает сохранённые данные (иначе дефолтное состояние затирало бы хранилище).
+  useEffect(() => {
+    if (skipFirstSaveRef.current) {
+      skipFirstSaveRef.current = false
+      return
+    }
+    PortfolioStorage.save({ version: 4, tier, nextPortfolioId, activePortfolioId, portfolios })
+  }, [tier, nextPortfolioId, activePortfolioId, portfolios])
+
   const handleUpdateAsset = useCallback(
     (updatedAsset: Asset) => {
       const validation = AssetValidator.validate(updatedAsset, useGroups)
@@ -178,9 +215,9 @@ export function PortfolioRebalancer() {
         setError(validation.errors[0])
         return
       }
-      setAssets((prevAssets) => {
-        const oldAsset = prevAssets.find((a) => a.id === updatedAsset.id)
-        const updated = prevAssets.map((a) => (a.id === updatedAsset.id ? updatedAsset : a))
+      updateActiveContent((p) => {
+        const oldAsset = p.assets.find((a) => a.id === updatedAsset.id)
+        const updated = p.assets.map((a) => (a.id === updatedAsset.id ? updatedAsset : a))
         if (
           oldAsset &&
           (oldAsset.ticker !== updatedAsset.ticker ||
@@ -190,30 +227,33 @@ export function PortfolioRebalancer() {
         ) {
           setTimeout(() => resetCalculation(), 0)
         }
-        return updated
+        return { ...p, assets: updated }
       })
       setError(null)
     },
-    [resetCalculation, useGroups],
+    [resetCalculation, useGroups, updateActiveContent],
   )
 
   const handleAddAsset = useCallback(() => {
-    setNextId((prev) => prev + 1)
-    setAssets((prevAssets) => [
-      ...prevAssets,
-      { id: nextId, ticker: "", quantity: 0, price: 0, targetPercent: 0, groupId: null, lotSize: 1 },
-    ])
+    updateActiveContent((p) => ({
+      ...p,
+      nextId: p.nextId + 1,
+      assets: [
+        ...p.assets,
+        { id: p.nextId, ticker: "", quantity: 0, price: 0, targetPercent: 0, groupId: null, lotSize: 1 },
+      ],
+    }))
     setError(null)
     resetCalculation()
-  }, [nextId, resetCalculation])
+  }, [resetCalculation, updateActiveContent])
 
   const handleRemoveAsset = useCallback(
     (id: number) => {
-      if (assets.length <= 1) return
-      setAssets((prevAssets) => prevAssets.filter((a) => a.id !== id))
+      if (activePortfolio && activePortfolio.assets.length <= 1) return
+      updateActiveContent((p) => ({ ...p, assets: p.assets.filter((a) => a.id !== id) }))
       resetCalculation()
     },
-    [assets.length, resetCalculation],
+    [activePortfolio, resetCalculation, updateActiveContent],
   )
 
   const handleRefreshPrices = useCallback(async () => {
@@ -247,13 +287,14 @@ export function PortfolioRebalancer() {
         fetched = await MoexPriceService.fetchPrices(tickers)
       }
       const { prices, lotSizes, errors } = fetched
-      setAssets((prevAssets) =>
-        prevAssets.map((asset, index) => ({
+      updateActiveContent((p) => ({
+        ...p,
+        assets: p.assets.map((asset, index) => ({
           ...asset,
           price: prices[index] !== null && prices[index] !== undefined ? (prices[index] as number) : asset.price,
           lotSize: lotSizes[index] != null && (lotSizes[index] as number) >= 1 ? (lotSizes[index] as number) : asset.lotSize || 1,
         })),
-      )
+      }))
       if (usedFallback) {
         setNotice("Актуальные цены недоступны, данные обновляются с задержкой 15 минут")
       } else if (errors.length > 0) {
@@ -266,18 +307,24 @@ export function PortfolioRebalancer() {
     } finally {
       setLoading(false)
     }
-  }, [assets, resetCalculation, tier, startPriceRefreshCooldown])
+  }, [assets, resetCalculation, tier, startPriceRefreshCooldown, updateActiveContent])
 
-  const handleCashBalanceChange = useCallback((value: number) => {
-    setCashBalance(PortfolioCalculator.floorMoney(value))
-  }, [])
+  const handleCashBalanceChange = useCallback(
+    (value: number) => {
+      updateActiveContent((p) => ({ ...p, cashBalance: PortfolioCalculator.floorMoney(value) }))
+    },
+    [updateActiveContent],
+  )
 
   const handleAddCash = useCallback(() => {
     if (additionalCash > 0) {
-      setCashBalance((prev) => PortfolioCalculator.floorMoney(prev + additionalCash))
+      updateActiveContent((p) => ({
+        ...p,
+        cashBalance: PortfolioCalculator.floorMoney(p.cashBalance + additionalCash),
+      }))
       setAdditionalCash(0)
     }
-  }, [additionalCash])
+  }, [additionalCash, updateActiveContent])
 
   const handleCalculate = useCallback(() => {
     setIsCalculating(true)
@@ -293,7 +340,10 @@ export function PortfolioRebalancer() {
         useGroups ? groups : null,
       )
       if (additionalCash > 0) {
-        setCashBalance((prev) => PortfolioCalculator.floorMoney(prev + additionalCash))
+        updateActiveContent((p) => ({
+          ...p,
+          cashBalance: PortfolioCalculator.floorMoney(p.cashBalance + additionalCash),
+        }))
         setAdditionalCash(0)
       }
       setCalculatedSpent(cashSpent)
@@ -305,7 +355,8 @@ export function PortfolioRebalancer() {
       setAnimationKey((prev) => prev + 1)
       setTimeout(() => setIsCalculated(false), 2000)
     }, 400)
-  }, [assets, cashBalance, additionalCash, useGroups, groups])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assets, cashBalance, additionalCash, updateActiveContent])
 
   const handleTargetEmptyChange = useCallback((id: number, isEmpty: boolean) => {
     setEmptyTargetIds((prev) => {
@@ -317,8 +368,11 @@ export function PortfolioRebalancer() {
   }, [])
 
   const handleDistributeEvenly = useCallback(() => {
-    setAssets((prevAssets) => PortfolioCalculator.distributeTargets(prevAssets, emptyTargetIds, useGroups ? groups : null))
-  }, [emptyTargetIds, useGroups, groups])
+    updateActiveContent((p) => ({
+      ...p,
+      assets: PortfolioCalculator.distributeTargets(p.assets, emptyTargetIds, useGroups ? p.groups : null),
+    }))
+  }, [emptyTargetIds, updateActiveContent])
 
   // Определяем handleQuantityChanged ДО потребителя, чтобы избежать TDZ в ES-модулях.
   const handleQuantityChanged = useCallback((id: number) => {
@@ -331,36 +385,50 @@ export function PortfolioRebalancer() {
 
   const handleApplySingleAdjustment = useCallback(
     (assetId: number, requiredQuantity: number, adjustmentValue: number) => {
-      setAssets((prevAssets) =>
-        prevAssets.map((a) => (a.id === assetId ? { ...a, quantity: Math.round(requiredQuantity) } : a)),
-      )
-      setCashBalance((prev) => {
-        const newBalance = prev - adjustmentValue
-        return Math.floor(newBalance * 100) / 100
-      })
+      updateActiveContent((p) => ({
+        ...p,
+        assets: p.assets.map((a) => (a.id === assetId ? { ...a, quantity: Math.round(requiredQuantity) } : a)),
+        cashBalance: Math.floor((p.cashBalance - adjustmentValue) * 100) / 100,
+      }))
       handleQuantityChanged(assetId)
     },
-    [handleQuantityChanged],
+    [handleQuantityChanged, updateActiveContent],
   )
 
   const handleUseGroupsChange = useCallback(
     (value: boolean) => {
-      setUseGroups(value)
-      if (!value) {
-        setAssets((prevAssets) => prevAssets.map((a) => ({ ...a, groupId: null })))
-      }
+      updateActiveContent((p) => ({
+        ...p,
+        useGroups: value,
+        assets: value ? p.assets : p.assets.map((a) => ({ ...a, groupId: null })),
+      }))
       resetCalculation()
     },
-    [resetCalculation],
+    [resetCalculation, updateActiveContent],
   )
 
   const handleAddGroup = useCallback(
     (name: string, percent: number, color: string) => {
-      setNextGroupId((prev) => prev + 1)
-      setGroups((prevGroups) => [...prevGroups, { id: nextGroupId, name, percent, color: color || "#94a3b8" }])
+      updateActiveContent((p) => ({
+        ...p,
+        nextGroupId: p.nextGroupId + 1,
+        groups: [...p.groups, { id: p.nextGroupId, name, percent, color: color || "#94a3b8" }],
+      }))
       resetCalculation()
     },
-    [nextGroupId, resetCalculation],
+    [resetCalculation, updateActiveContent],
+  )
+
+  const handleRemoveGroup = useCallback(
+    (id: number) => {
+      updateActiveContent((p) => ({
+        ...p,
+        groups: p.groups.filter((g) => g.id !== id),
+        assets: p.assets.map((a) => (a.groupId === id ? { ...a, groupId: null } : a)),
+      }))
+      resetCalculation()
+    },
+    [resetCalculation, updateActiveContent],
   )
 
   const handleApplyAllAdjustments = useCallback(() => {
@@ -371,85 +439,101 @@ export function PortfolioRebalancer() {
       }, 0) || 0
     const totalAdjustmentKopeks = Math.round(totalAdjustmentValue * 100) / 100
 
-    setAssets((prevAssets) =>
-      prevAssets.map((a) => {
+    updateActiveContent((p) => ({
+      ...p,
+      assets: p.assets.map((a) => {
         const aAnalysis = calculatedAnalysis?.find((an) => an.id === a.id)
         if (!aAnalysis || !appliedAdjustmentIds.has(a.id)) return a
         return { ...a, quantity: Math.round(aAnalysis.requiredQuantity) }
       }),
-    )
-    setCashBalance((prev) => {
-      const newBalance = prev - totalAdjustmentKopeks
-      return Math.floor(newBalance * 100) / 100
-    })
+      cashBalance: Math.floor((p.cashBalance - totalAdjustmentKopeks) * 100) / 100,
+    }))
     setAppliedAdjustmentIds(new Set())
     resetCalculation()
-  }, [calculatedAnalysis, appliedAdjustmentIds, resetCalculation])
+  }, [calculatedAnalysis, appliedAdjustmentIds, resetCalculation, updateActiveContent])
 
-  const handleRemoveGroup = useCallback(
-    (id: number) => {
-      setGroups((prevGroups) => prevGroups.filter((g) => g.id !== id))
-      setAssets((prevAssets) => prevAssets.map((a) => (a.groupId === id ? { ...a, groupId: null } : a)))
+  // --- Управление портфелями ------------------------------------------------------------
+  const handleSelectPortfolio = useCallback((id: number) => {
+    setActivePortfolioId(id)
+    resetCalculation()
+    setError(null)
+    setNotice(null)
+  }, [resetCalculation])
+
+  const handleAddPortfolio = useCallback(
+    (name: string) => {
+      if (!canAddPortfolioFlag) return
+      const newPortfolio = createEmptyPortfolio(nextPortfolioId, name)
+      setPortfolios((prev) => [...prev, newPortfolio])
+      setNextPortfolioId((prev) => prev + 1)
+      setActivePortfolioId(newPortfolio.id)
       resetCalculation()
+      setError(null)
+      setNotice(null)
     },
-    [resetCalculation],
+    [canAddPortfolioFlag, nextPortfolioId, resetCalculation],
+  )
+
+  const handleRenamePortfolio = useCallback((id: number, name: string) => {
+    setPortfolios((prev) => prev.map((p) => (p.id === id ? { ...p, name: name || p.name } : p)))
+  }, [])
+
+  const handleDeletePortfolio = useCallback(
+    (id: number) => {
+      setPortfolios((prev) => {
+        const remaining = prev.filter((p) => p.id !== id)
+        if (remaining.length === 0) return prev
+        return remaining
+      })
+      setActivePortfolioId((cur) => {
+        if (cur !== id) return cur
+        const remaining = portfolios.filter((p) => p.id !== id)
+        return remaining[0]?.id ?? cur
+      })
+      resetCalculation()
+      setError(null)
+      setNotice(null)
+    },
+    [portfolios, resetCalculation],
   )
 
   const handleTierChange = useCallback(
     (newTier: Tier) => {
       setTier(newTier)
-      // После «оплаты» подписки восстанавливаем заблокированный портфель, если
-      // выбранный тариф его покрывает.
-      if (lockedSnapshot && tierCovers(lockedRequiredTier, newTier)) {
-        const snap = lockedSnapshot
-        setLockedSnapshot(null)
-        setAssets(normalizeAssets(snap.assets))
-        setNextId(snap.nextId)
-        setCashBalance(snap.cashBalance ?? 0)
-        setUseGroups(snap.useGroups ?? false)
-        setGroups(snap.groups ?? [])
-        setNextGroupId(snap.nextGroupId ?? 1)
+      // После «оплаты» подписки восстанавливаем заблокированный активный портфель,
+      // если выбранный тариф его покрывает.
+      const snap = activePortfolio?.lockedSnapshot
+      if (snap && tierCovers(lockedRequiredTier, newTier)) {
+        updateActiveContent(() => ({
+          ...activePortfolio,
+          lockedSnapshot: null,
+          assets: normalizeAssets(snap.assets),
+          nextId: snap.nextId,
+          cashBalance: snap.cashBalance ?? 0,
+          useGroups: snap.useGroups ?? false,
+          groups: snap.groups ?? [],
+          nextGroupId: snap.nextGroupId ?? 1,
+        }))
         setAdditionalCash(0)
         setAppliedAdjustmentIds(new Set())
         resetCalculation()
         setError(null)
         setNotice(null)
       }
-      // При переходе на тариф, не допускающий группы (Базовый/Бесплатный),
-      // портфель с группами не соответствует новому тарифу — он будет очищен
-      // и сохранён в снапшот эффектом автоблокировки. Оставляем группы как есть,
-      // чтобы логика несоответствия сработала корректно.
     },
-    [lockedSnapshot, lockedRequiredTier, resetCalculation],
+    [activePortfolio, lockedRequiredTier, resetCalculation, updateActiveContent],
   )
-
-  useEffect(() => {
-    // Пропускаем первый вызов на монтировании: в этот момент restore-эффект ещё
-    // подтягивает сохранённые данные из localStorage. Запись дефолтного («пустого»)
-    // состояния в этот момент затирала бы хранилище, и портфель терялся бы
-    // при перезапуске. Сохранение начнёт срабатывать со следующего изменения.
-    if (skipFirstSaveRef.current) {
-      skipFirstSaveRef.current = false
-      return
-    }
-    PortfolioStorage.save({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId, lockedSnapshot })
-  }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId])
-
-  // Загружаем цены при первом монтировании.
-  useEffect(() => {
-    handleRefreshPrices()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = useCallback(() => {
+    if (!activePortfolio) return
     try {
-      PortfolioStorage.exportToFile({ assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId })
+      PortfolioStorage.exportToFile(activePortfolio)
     } catch (err) {
       setError((err as Error).message)
     }
-  }, [assets, nextId, cashBalance, tier, useGroups, groups, nextGroupId])
+  }, [activePortfolio])
 
   const handleImport = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -457,16 +541,19 @@ export function PortfolioRebalancer() {
       if (!file) return
       try {
         const data = await PortfolioStorage.importFromFile(file)
-        setAssets(normalizeAssets(data.assets))
-        setNextId(data.nextId)
-        if (data.cashBalance != null) setCashBalance(data.cashBalance)
-        if (data.tier != null) setTier(data.tier)
-        setUseGroups(data.useGroups ?? false)
-        setGroups(data.groups ?? [])
-        setNextGroupId(data.nextGroupId ?? 1)
+        updateActiveContent((p) => ({
+          ...p,
+          name: data.name || p.name,
+          assets: normalizeAssets(data.assets),
+          nextId: data.nextId,
+          cashBalance: data.cashBalance ?? 0,
+          useGroups: data.useGroups ?? false,
+          groups: data.groups ?? [],
+          nextGroupId: data.nextGroupId ?? 1,
+          lockedSnapshot: data.lockedSnapshot ?? null,
+        }))
         setAdditionalCash(0)
         setAppliedAdjustmentIds(new Set())
-        setLockedSnapshot(data.lockedSnapshot ?? null)
         resetCalculation()
         setError(null)
       } catch (err) {
@@ -475,20 +562,17 @@ export function PortfolioRebalancer() {
         if (fileInputRef.current) fileInputRef.current.value = ""
       }
     },
-    [resetCalculation],
+    [resetCalculation, updateActiveContent],
   )
 
   const handleReset = useCallback(() => {
     PortfolioStorage.clear()
-    setAssets([])
-    setNextId(1)
-    setCashBalance(0)
+    const def = createEmptyPortfolio(1, "Основной")
+    setPortfolios([def])
+    setActivePortfolioId(1)
+    setNextPortfolioId(2)
     setTier("basic")
     setAdditionalCash(0)
-    setUseGroups(false)
-    setGroups([])
-    setNextGroupId(1)
-    setLockedSnapshot(null)
     setIsCalculated(false)
     setCalculatedAnalysis(null)
     setCalculatedSpent(null)
@@ -496,9 +580,22 @@ export function PortfolioRebalancer() {
     setEmptyTargetIds(new Set())
     setAppliedAdjustmentIds(new Set())
     setError(null)
+    setNotice(null)
+  }, [])
+
+  // Загружаем цены при первом монтировании.
+  useEffect(() => {
+    handleRefreshPrices()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const canCalculate = assets.length > 0 && !isCalculating
+
+  const analysis = useMemo(() => calculatedAnalysis ?? [], [calculatedAnalysis])
+  const portfolioValidation = useMemo(
+    () => AssetValidator.validatePortfolio(assets, useGroups ? groups : null),
+    [assets, useGroups, groups],
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -520,11 +617,22 @@ export function PortfolioRebalancer() {
         ) : (
           <div className="space-y-6">
             <header className="space-y-1">
-              <h2 className="text-2xl font-semibold text-foreground">Портфель</h2>
+              <h2 className="text-2xl font-semibold text-foreground">{activePortfolio?.name ?? "Портфель"}</h2>
               <p className="text-sm font-normal text-muted-foreground">
                 Держите инвестиционный портфель на целевых долях вместе с Московской биржей.
               </p>
             </header>
+
+            <PortfolioSwitcher
+              portfolios={portfolios}
+              activePortfolioId={activePortfolioId}
+              canAdd={canAddPortfolioFlag}
+              onSelect={handleSelectPortfolio}
+              onAdd={handleAddPortfolio}
+              onRename={handleRenamePortfolio}
+              onDelete={handleDeletePortfolio}
+            />
+
             {isLocked && (
               <div className="flex flex-col gap-3 rounded-2xl border border-accent-foreground/20 bg-accent px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">

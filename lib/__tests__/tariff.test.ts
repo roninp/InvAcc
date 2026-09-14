@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { getRequiredTier, tierCovers } from "../tariff"
+import { canAddPortfolio, getRequiredTier, tierCovers, TIER_MAX_PORTFOLIOS } from "../tariff"
 import type { Asset, Group, Tier } from "../types"
 
 const makeAsset = (id: number): Asset => ({
@@ -53,5 +53,27 @@ describe("tierCovers", () => {
     expect(tierCovers("pro", "basic")).toBe(false)
     expect(tierCovers("basic", "free")).toBe(false)
     expect(tierCovers("pro", "free")).toBe(false)
+  })
+})
+
+describe("лимиты числа портфелей", () => {
+  it("free=1, basic=1, pro=7", () => {
+    expect(TIER_MAX_PORTFOLIOS.free).toBe(1)
+    expect(TIER_MAX_PORTFOLIOS.basic).toBe(1)
+    expect(TIER_MAX_PORTFOLIOS.pro).toBe(7)
+  })
+
+  it("canAddPortfolio разрешает добавление в пределах лимита", () => {
+    expect(canAddPortfolio("free", 0)).toBe(true)
+    expect(canAddPortfolio("free", 1)).toBe(false)
+    expect(canAddPortfolio("basic", 1)).toBe(false)
+    expect(canAddPortfolio("basic", 0)).toBe(true)
+    expect(canAddPortfolio("pro", 0)).toBe(true)
+    expect(canAddPortfolio("pro", 6)).toBe(true)
+  })
+
+  it("canAddPortfolio блокирует 8-й портфель на Про", () => {
+    expect(canAddPortfolio("pro", 7)).toBe(false)
+    expect(canAddPortfolio("pro", 8)).toBe(false)
   })
 })

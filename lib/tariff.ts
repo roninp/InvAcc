@@ -39,3 +39,15 @@ export function getRequiredTier(assets: Asset[], useGroups: boolean, groups: Gro
 export function tierCovers(required: Tier, current: Tier): boolean {
   return TIER_RANK[current] >= TIER_RANK[required]
 }
+
+/** Лимиты числа портфелей по тарифам. */
+export const TIER_MAX_PORTFOLIOS: Record<Tier, number> = {
+  free: 1,
+  basic: 1,
+  pro: 7,
+}
+
+/** Можно ли добавить новый портфель при текущем тарифе и имеющемся числе портфелей. */
+export function canAddPortfolio(tier: Tier, count: number): boolean {
+  return count < TIER_MAX_PORTFOLIOS[tier]
+}
