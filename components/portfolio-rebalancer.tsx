@@ -171,11 +171,35 @@ export function PortfolioRebalancer() {
     setTier(saved.tier ?? "basic")
   }, [])
 
-  // Автоблокировка активного портфеля при несоответствии тарифу: сохраняем снапшот
-  // содержимого и очищаем его. Восстановление происходит после оплаты/выбора
-  // более высокого тарифа (см. handleTierChange). Остальные портфели не затрагиваются.
+  // Автоблокировка/восстановление активного портфеля при несоответствии тарифу.
+  // Если портфель не соответствует тарифу — сохраняем снапшот содержимого и очищаем его.
+  // Если портфель заблокирован, но выбранный тариф уже его покрывает (например, после
+  // улучшения тарифа где-либо в приложении) — автоматически восстанавливаем содержимое
+  // из снапшота. Восстановление всех заблокированных портфелей, независимо от активного,
+  // выполняется также в handleTierChange.
   useEffect(() => {
-    if (!activePortfolio || isLocked) return
+    if (!activePortfolio) return
+    if (isLocked) {
+      if (tierCovers(lockedRequiredTier, tier)) {
+        const snap = activePortfolio.lockedSnapshot!
+        updateActiveContent(() => ({
+          ...activePortfolio,
+          lockedSnapshot: null,
+          assets: normalizeAssets(snap.assets),
+          nextId: snap.nextId,
+          cashBalance: snap.cashBalance ?? 0,
+          useGroups: snap.useGroups ?? false,
+          groups: snap.groups ?? [],
+          nextGroupId: snap.nextGroupId ?? 1,
+        }))
+        setAdditionalCash(0)
+        setAppliedAdjustmentIds(new Set())
+        resetCalculation()
+        setError(null)
+        setNotice(null)
+      }
+      return
+    }
     const required = getRequiredTier(assets, useGroups, groups)
     if (tierCovers(required, tier)) return
     const snap: PortfolioContent = { assets, nextId, cashBalance, useGroups, groups, nextGroupId: activePortfolio.nextGroupId }
@@ -196,7 +220,7 @@ export function PortfolioRebalancer() {
     setError(null)
     setNotice(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, useGroups, groups, tier, isLocked, activePortfolio])
+  }, [assets, useGroups, groups, tier, isLocked, activePortfolio, lockedRequiredTier])
 
   // Авто-save. Пропускаем первый вызов на монтировании, когда restore-эффект ещё
   // подтягивает сохранённые данные (иначе дефолтное состояние затирало бы хранилище).
@@ -511,28 +535,34 @@ export function PortfolioRebalancer() {
   const handleTierChange = useCallback(
     (newTier: Tier) => {
       setTier(newTier)
-      // После «оплаты» подписки восстанавливаем заблокированный активный портфель,
-      // если выбранный тариф его покрывает.
-      const snap = activePortfolio?.lockedSnapshot
-      if (snap && tierCovers(lockedRequiredTier, newTier)) {
-        updateActiveContent(() => ({
-          ...activePortfolio,
-          lockedSnapshot: null,
-          assets: normalizeAssets(snap.assets),
-          nextId: snap.nextId,
-          cashBalance: snap.cashBalance ?? 0,
-          useGroups: snap.useGroups ?? false,
-          groups: snap.groups ?? [],
-          nextGroupId: snap.nextGroupId ?? 1,
-        }))
-        setAdditionalCash(0)
-        setAppliedAdjustmentIds(new Set())
-        resetCalculation()
-        setError(null)
-        setNotice(null)
-      }
+      // После «оплаты» подписки восстанавливаем ВСЕ заблокированные портфели, чей требуемый
+      // тариф покрывается выбранным, — независимо от того, какой портфель сейчас активен.
+      // Так улучшение тарифа на одном портфеле срабатывает и в остальных портфелях.
+      setPortfolios((prev) =>
+        prev.map((p) => {
+          const snap = p.lockedSnapshot
+          if (!snap) return p
+          const req = getRequiredTier(snap.assets, snap.useGroups, snap.groups)
+          if (!tierCovers(req, newTier)) return p
+          return {
+            ...p,
+            lockedSnapshot: null,
+            assets: normalizeAssets(snap.assets),
+            nextId: snap.nextId,
+            cashBalance: snap.cashBalance ?? 0,
+            useGroups: snap.useGroups ?? false,
+            groups: snap.groups ?? [],
+            nextGroupId: snap.nextGroupId ?? 1,
+          }
+        }),
+      )
+      setAdditionalCash(0)
+      setAppliedAdjustmentIds(new Set())
+      resetCalculation()
+      setError(null)
+      setNotice(null)
     },
-    [activePortfolio, lockedRequiredTier, resetCalculation, updateActiveContent],
+    [resetCalculation],
   )
 
   const fileInputRef = useRef<HTMLInputElement>(null)
