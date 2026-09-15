@@ -130,7 +130,7 @@ export function AssetRow({
 
       {/* Цена за шт./лот */}
       <td className="px-4 py-3 align-middle">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-col items-end justify-end gap-1">
           <NumericInput
             value={asset.price}
             onChange={(val) => onUpdate({ ...asset, price: val })}
@@ -140,9 +140,12 @@ export function AssetRow({
             aria-label="Цена за штуку"
           />
           {lotSize > 1 && (
-            <span className="whitespace-nowrap font-mono text-xs tabular-nums text-slate-400">
-              За лот: {lotPrice.toFixed(priceDecimals)} ({lotSize} шт.)
-            </span>
+            <div className="text-right font-mono text-xs tabular-nums leading-tight text-slate-400">
+              <div>За лот:</div>
+              <div className="whitespace-nowrap">
+                {lotPrice.toFixed(priceDecimals)} ({lotSize} шт.)
+              </div>
+            </div>
           )}
         </div>
       </td>
