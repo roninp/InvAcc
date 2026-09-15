@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Plus, Trash2 } from "lucide-react"
+import { Check, Pencil, Plus, Trash2, X } from "lucide-react"
 import { GROUP_COLORS, type Group, type Tier } from "@/lib/types"
 
 const TIERS: { id: Tier; label: string; desc: string }[] = [
@@ -18,6 +18,7 @@ export function SettingsPage({
   groups,
   onAddGroup,
   onRemoveGroup,
+  onUpdateGroup,
 }: {
   tier: Tier
   onTierChange: (tier: Tier) => void
@@ -26,11 +27,16 @@ export function SettingsPage({
   groups: Group[]
   onAddGroup: (name: string, percent: number, color: string) => void
   onRemoveGroup: (id: number) => void
+  onUpdateGroup: (id: number, patch: { name?: string; percent?: number; color?: string }) => void
 }) {
   const [newGroupName, setNewGroupName] = useState("")
   const [newGroupPercent, setNewGroupPercent] = useState("")
   const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0])
   const [formError, setFormError] = useState<string | null>(null)
+  const [editingGroupId, setEditingGroupId] = useState<number | null>(null)
+  const [editGroupName, setEditGroupName] = useState("")
+  const [editGroupPercent, setEditGroupPercent] = useState("")
+  const [editGroupColor, setEditGroupColor] = useState(GROUP_COLORS[0])
 
   const sumGroupPercents = groups.reduce((s, g) => s + g.percent, 0)
   const isSumValid = Math.abs(sumGroupPercents - 100) <= 0.01
@@ -50,6 +56,31 @@ export function SettingsPage({
     setNewGroupName("")
     setNewGroupPercent("")
     setNewGroupColor(GROUP_COLORS[0])
+    setFormError(null)
+  }
+
+  const startEditGroup = (g: Group) => {
+    setEditingGroupId(g.id)
+    setEditGroupName(g.name)
+    setEditGroupPercent(String(g.percent))
+    setEditGroupColor(g.color || "#94a3b8")
+    setFormError(null)
+  }
+
+  const handleSaveEditGroup = () => {
+    if (editingGroupId == null) return
+    const name = editGroupName.trim()
+    const percent = Number.parseFloat(editGroupPercent)
+    if (!name) {
+      setFormError("Введите название группы")
+      return
+    }
+    if (isNaN(percent) || percent <= 0 || percent > 100) {
+      setFormError("Доля группы должна быть от 0 до 100")
+      return
+    }
+    onUpdateGroup(editingGroupId, { name, percent, color: editGroupColor })
+    setEditingGroupId(null)
     setFormError(null)
   }
 
@@ -179,32 +210,108 @@ export function SettingsPage({
 
             {groups.length > 0 && (
               <div className="mt-4 space-y-2">
-                {groups.map((g) => (
-                  <div
-                    key={g.id}
-                    className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-2.5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
-                        style={{ backgroundColor: g.color || "#94a3b8" }}
-                      />
-                      <span className="text-sm font-normal text-label">{g.name}</span>
-                      <span className="font-mono text-sm tabular-nums text-muted-foreground">
-                        {g.percent.toFixed(2)}%
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveGroup(g.id)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-negative-muted hover:text-negative"
-                      title="Удалить группу"
-                      aria-label="Удалить группу"
+                {groups.map((g) => {
+                  const isEditing = editingGroupId === g.id
+                  return (
+                    <div
+                      key={g.id}
+                      className={`flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-2.5 ${
+                        isEditing ? "ring-1 ring-ring/40" : ""
+                      }`}
                     >
-                      <Trash2 className="h-4 w-4" strokeWidth={2} />
-                    </button>
-                  </div>
-                ))}
+                      {isEditing ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label
+                            className="flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm transition-colors hover:border-primary/40"
+                            title="Цвет группы"
+                          >
+                            <input
+                              type="color"
+                              value={editGroupColor}
+                              onChange={(e) => setEditGroupColor(e.target.value)}
+                              className="h-7 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
+                            />
+                            <span className="text-label">Цвет</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editGroupName}
+                            onChange={(e) => setEditGroupName(e.target.value)}
+                            placeholder="Название"
+                            aria-label={`Название группы ${g.id}`}
+                            className="min-w-[180px] rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-ring/40 placeholder:text-label"
+                          />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editGroupPercent}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              if (v === "" || /^\d+\.?\d*$/.test(v) || /^\d*\.?\d+$/.test(v)) setEditGroupPercent(v)
+                            }}
+                            aria-label={`Доля группы ${g.id}`}
+                            placeholder="Доля %"
+                            className="w-24 rounded-lg border border-input bg-background px-3 py-2 text-right font-mono text-sm tabular-nums outline-none transition-shadow focus:ring-2 focus:ring-ring/40 placeholder:text-label"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
+                            style={{ backgroundColor: g.color || "#94a3b8" }}
+                          />
+                          <span className="text-sm font-normal text-label">{g.name}</span>
+                          <span className="font-mono text-sm tabular-nums text-muted-foreground">
+                            {g.percent.toFixed(2)}%
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={handleSaveEditGroup}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-positive transition-colors hover:bg-positive-muted"
+                              title="Сохранить группу"
+                              aria-label="Сохранить группу"
+                            >
+                              <Check className="h-4 w-4" strokeWidth={2.5} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingGroupId(null)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-negative-muted hover:text-negative"
+                              title="Отменить редактирование"
+                              aria-label="Отменить редактирование"
+                            >
+                              <X className="h-4 w-4" strokeWidth={2} />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => startEditGroup(g)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+                            title="Редактировать группу"
+                            aria-label="Редактировать группу"
+                          >
+                            <Pencil className="h-4 w-4" strokeWidth={2} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onRemoveGroup(g.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-negative-muted hover:text-negative"
+                          title="Удалить группу"
+                          aria-label="Удалить группу"
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
 

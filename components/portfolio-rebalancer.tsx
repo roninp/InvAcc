@@ -431,6 +431,17 @@ export function PortfolioRebalancer() {
     [resetCalculation, updateActiveContent],
   )
 
+  const handleUpdateGroup = useCallback(
+    (id: number, patch: { name?: string; percent?: number; color?: string }) => {
+      updateActiveContent((p) => ({
+        ...p,
+        groups: p.groups.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+      }))
+      resetCalculation()
+    },
+    [resetCalculation, updateActiveContent],
+  )
+
   const handleApplyAllAdjustments = useCallback(() => {
     const totalAdjustmentValue =
       calculatedAnalysis?.reduce((sum, a) => {
@@ -613,6 +624,7 @@ export function PortfolioRebalancer() {
             groups={groups}
             onAddGroup={handleAddGroup}
             onRemoveGroup={handleRemoveGroup}
+            onUpdateGroup={handleUpdateGroup}
           />
         ) : (
           <div className="space-y-6">
